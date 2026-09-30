@@ -14,6 +14,17 @@ uv sync
 
 `uv` creates `.venv` and `uv.lock`. The lockfile should be kept with the project; `.venv` is ignored.
 
+## Initialize PostgreSQL
+
+Set `DATABASE_URL` in your shell or in `app/mcp_server/.env`, then run the initializer from `app/mcp_server`:
+
+```powershell
+$env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_planner"
+uv run db/db_init.py
+```
+
+The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py`. The PostgreSQL user must have `CREATEDB` permission. The temporary `Student` model creates a `students` table; this initializer does not update existing tables when the model changes.
+
 ## Run locally
 
 Start the server over stdio (the default):
