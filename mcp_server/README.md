@@ -45,7 +45,7 @@ Run the combined REST and MCP listener from `app/mcp_server`:
 .\.venv\Scripts\python.exe -m src.api.app
 ```
 
-After syncing the project, `uv run study-api` is equivalent. It binds to `127.0.0.1:8001` by default and serves REST at `/api` and MCP at `/mcp`. Pass `--port 8002` if that port is occupied. On startup, this app reads `app/mcp_server/.env`; an explicitly set `DATABASE_URL` takes precedence. An example request:
+After syncing the project, `uv run api-server` is equivalent. It binds to `127.0.0.1:8001` by default and serves REST at `/api` and MCP at `/mcp`. Pass `--port 8002` if that port is occupied. On startup, this app reads `app/mcp_server/.env`; an explicitly set `DATABASE_URL` takes precedence. An example request:
 
 ```powershell
 $payload = @{ text = "Database assignment due Friday"; title = "Course note" } | ConvertTo-Json
