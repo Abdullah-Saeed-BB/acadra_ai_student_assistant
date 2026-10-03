@@ -1,8 +1,9 @@
-"""Bare MCP server entry point; tools and resources will be added later."""
+"""MCP entry point; HTTP mode also serves web REST routes."""
 
 import argparse
 
 from mcp.server.fastmcp import FastMCP
+import uvicorn
 
 from .config import Settings
 from .mcp.tools.manual_text import register as register_manual_text
@@ -19,10 +20,19 @@ def main() -> None:
         "--transport",
         choices=("stdio", "streamable-http"),
         default=settings.transport,
-        help="MCP transport to use (default: STUDY_MCP_TRANSPORT or stdio)",
+        help="MCP transport to use (default: STUDY_MCP_TRANSPORT or streamable-http)",
     )
     args = parser.parse_args()
-    mcp.run(transport=args.transport)
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+        return
+
+    uvicorn.run(
+        "src.api.app:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug,
+    )
 
 
 if __name__ == "__main__":
