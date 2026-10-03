@@ -54,6 +54,16 @@ Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/text -Method Post -Cont
 
 `POST /api/sources/text` returns `201 Created` for a new source and `200 OK` for a replacement. Include the returned `source_document_id` in a later request to replace that source; omit it to create a new one. Invalid input returns `400`, `413`, `415`, or `422` as appropriate; an unknown source ID returns `404`; unavailable storage returns `503`. The listener has no student authentication yet and must remain on loopback. A future frontend can proxy `/api` to this port.
 
+### Retrieve academic items
+
+`GET /api/academic-items` reads saved academic records. Optional query parameters are `item_type` (`assignment`, `announcement`, `reading`, or `event`), `course_id` (UUID), `review_state` (`verified`, `uncertain`, or `conflicting`), `due_from` (inclusive), `due_before` (exclusive), `limit` (1–100, default 20), and `offset` (default 0). Date filters require an ISO 8601 date-time with a time zone. Results are ordered by due date with undated items last. The response contains `items`, `has_more`, and `next_offset` for paging.
+
+```powershell
+Invoke-RestMethod -Uri 'http://127.0.0.1:8001/api/academic-items?item_type=assignment&review_state=verified&limit=20' -Method Get
+```
+
+This endpoint only reads items already stored in `academic_items`. Manual text submissions currently create source revisions but do not yet extract academic items, so an empty result is expected until items are populated by later processing. The mistaken direct-item `POST /api/academic-items` route has been removed.
+
 Run the project-level checks from the repository root as shown in [`test/README.md`](../../test/README.md). Set `TEST_DATABASE_URL` to an initialized PostgreSQL database to also run the revision test; that test rolls its transaction back.
 
 ## Run locally
