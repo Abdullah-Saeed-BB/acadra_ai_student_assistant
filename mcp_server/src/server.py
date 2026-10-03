@@ -5,10 +5,12 @@ import argparse
 from mcp.server.fastmcp import FastMCP
 
 from .config import Settings
+from .mcp.tools.manual_text import register as register_manual_text
 
 
 settings = Settings.from_env()
-mcp = FastMCP("study_planner_mcp", host=settings.host, port=settings.port)
+mcp = FastMCP("study_planner_mcp", host=settings.host, port=settings.port, debug=settings.debug)
+register_manual_text(mcp)
 
 
 def main() -> None:
