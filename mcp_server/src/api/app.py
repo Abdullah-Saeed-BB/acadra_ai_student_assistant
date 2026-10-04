@@ -17,8 +17,8 @@ from starlette.routing import Route
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 from src.api.openapi import build_openapi_spec
-from src.api.routes.academic_items import get_academic_items
-from src.api.routes.manual_text import add_manual_text
+from src.api.routes.academic_items import get_academic_items, get_item_evidence
+from src.api.routes.manual_text import add_manual_text, get_source_candidates
 from src.server import mcp
 
 SWAGGER_UI_HTML = """<!DOCTYPE html>
@@ -70,7 +70,9 @@ async def openapi_spec(request: Request) -> Response:
 
 app = mcp.streamable_http_app()
 app.add_route("/api/sources/text", add_manual_text, methods=["POST"])
+app.add_route("/api/sources/text/{source_document_id}/candidates", get_source_candidates, methods=["GET"])
 app.add_route("/api/academic-items", get_academic_items, methods=["GET"])
+app.add_route("/api/academic-items/{item_id}/evidence", get_item_evidence, methods=["GET"])
 app.add_route("/docs", swagger_ui, methods=["GET"])
 app.add_route("/openapi.json", openapi_spec, methods=["GET"])
 

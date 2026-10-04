@@ -143,6 +143,13 @@ def build_openapi_spec(
                     for name, field_schema in query_schema.get("properties", {}).items()
                 ]
 
+            path_parameters = [
+                {"name": name, "in": "path", "required": True, "schema": {"type": "string"}}
+                for name in route.param_convertors
+            ]
+            if path_parameters:
+                op_dict["parameters"] = path_parameters + op_dict.get("parameters", [])
+
             operations[method_lower] = op_dict
 
         if operations:

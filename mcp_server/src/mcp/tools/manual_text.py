@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.connectors.manual import prepare_manual_text
 from src.services.manual_text import save_manual_text
+from src.services.source_processing import process_source_revision
 
 
 def register(mcp: FastMCP) -> None:
@@ -18,7 +19,7 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Save student-pasted plain text as a source. Omit source_document_id to "
             "create a new source; provide a previously returned ID to replace it. "
-            "This stores source revisions only; academic fact extraction is not yet enabled."
+            "The source is versioned, then academic facts are extracted when Groq is configured."
         ),
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -40,6 +41,7 @@ def register(mcp: FastMCP) -> None:
         envelope = prepare_manual_text(text, title=title, source_document_id=parsed_id)
         try:
             result = await save_manual_text(envelope)
+            processing = await process_source_revision(result.source_revision_id)
         except SQLAlchemyError:
             raise RuntimeError("Could not save manual text.") from None
         return {
@@ -47,4 +49,7 @@ def register(mcp: FastMCP) -> None:
             "source_revision_id": str(result.source_revision_id),
             "revision_no": result.revision_no,
             "created_revision": result.created_revision,
+            "processing_status": processing.status,
+            "academic_item_ids": [str(item_id) for item_id in processing.academic_item_ids],
+            "review_count": processing.review_count,
         }

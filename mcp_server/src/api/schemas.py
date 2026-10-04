@@ -21,6 +21,24 @@ class ManualTextResponse(BaseModel):
     source_revision_id: UUID
     revision_no: int
     created_revision: bool
+    processing_status: Literal["processed", "already_processed", "pending_configuration", "failed", "superseded"]
+    academic_item_ids: list[UUID]
+    review_count: int
+
+
+class SourceCandidateResponse(BaseModel):
+    id: UUID
+    source_revision_id: UUID
+    academic_item_id: UUID | None
+    evidence: dict[str, str | None]
+    review_reasons: list[str]
+    date_facts: dict[str, dict[str, str | None]]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SourceCandidateListResponse(BaseModel):
+    candidates: list[SourceCandidateResponse]
 
 
 class AcademicItemListQuery(BaseModel):
@@ -58,6 +76,18 @@ class AcademicItemResponse(BaseModel):
     review_state: Literal["verified", "uncertain", "conflicting"]
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AcademicItemEvidenceResponse(BaseModel):
+    source_document_id: UUID
+    source_revision_id: UUID
+    source_title: str | None
+    source_type: str
+    evidence: dict[str, str | None]
+    review_reasons: list[str]
+    date_facts: dict[str, dict[str, str | None]]
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,11 +1,11 @@
-"""SQLAlchemy models for the six cyan database tables in System.canvas."""
+"""SQLAlchemy models for source provenance and accepted academic facts."""
 
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, Text, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, Text, Uuid, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -113,3 +113,33 @@ class AcademicItemChange(Base):
     before_values: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     after_values: Mapped[dict[str, Any]] = mapped_column(JSON(none_as_null=True))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SourceItemLink(Base):
+    """Source-local identity and review evidence for an extracted candidate."""
+
+    __tablename__ = "source_item_links"
+    __table_args__ = (UniqueConstraint("source_document_id", "source_key"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    source_document_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("source_documents.id"))
+    source_key: Mapped[str] = mapped_column(Text)
+    academic_item_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("academic_items.id"))
+    source_revision_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("source_revisions.id"))
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON)
+    review_reasons: Mapped[list[str]] = mapped_column(JSON)
+    date_facts: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class SourceProcessingRun(Base):
+    """A completed or failed extraction attempt, without private prompt content."""
+
+    __tablename__ = "source_processing_runs"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    source_revision_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("source_revisions.id"))
+    status: Mapped[str] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(Text)
+    item_count: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

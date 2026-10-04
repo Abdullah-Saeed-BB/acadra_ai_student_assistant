@@ -1,6 +1,6 @@
 # Study planner MCP server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Its first data-processing slice accepts manually pasted plain text and stores source revisions. Academic extraction, inbox items, file/HTML intake, and external connectors are still planned.
+This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text is versioned and, when Groq is configured, extracted into source-grounded academic items and change events. File/HTML intake, the full inbox, planning, and external connectors are still planned.
 
 The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application.
 
@@ -22,20 +22,20 @@ Set `DATABASE_URL` in your shell or in `app/mcp_server/.env`, then run the initi
 
 ```powershell
 $env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_planner"
-uv run db/db_init.py
+uv run db/init_db.py
 ```
 
-The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py`. The PostgreSQL user must have `CREATEDB` permission. This initializer does not update existing tables when the model changes.
+The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py`. The PostgreSQL user must have `CREATEDB` permission. Run it again after this update to create `source_item_links` and `source_processing_runs` in an existing database. This initializer does not update existing tables when the model changes.
 
 ## Manual text intake
 
-Set `DATABASE_URL` in the server process environment before starting the server. The MCP tool `study_add_manual_text` accepts:
+Set `DATABASE_URL` in the server process environment before starting the server. Set `GROQ_API_KEY` to enable extraction; `GROQ_MODEL` defaults to `openai/gpt-oss-120b`. Groq receives the cleaned source text for extraction. The MCP tool `study_add_manual_text` accepts:
 
 - `text` (required): plain text up to 64 KiB encoded as UTF-8.
 - `title` (optional): a display title, up to 200 characters.
 - `source_document_id` (optional): an ID previously returned by the tool to replace that manual source. Omit it to create a separate source, even if the text matches another paste.
 
-The result contains `source_document_id`, `source_revision_id`, `revision_no`, and `created_revision`. Replacing a source with equivalent normalized text updates its last-seen time but returns the existing revision with `created_revision: false`. Changed text creates the next revision. This tool stores source material only; it does not yet extract assignments or create inbox changes.
+The result contains `source_document_id`, `source_revision_id`, `revision_no`, `created_revision`, `processing_status`, `academic_item_ids`, and `review_count`. Replacing a source with equivalent normalized text updates its last-seen time but returns the existing revision with `created_revision: false`. Changed text creates the next revision. Processing can be `processed`, `already_processed`, `pending_configuration`, `failed`, or `superseded`. A source remains saved if extraction fails; re-submit the same text with its source ID to retry. Accepted academic fields are stored in `academic_items`, and created or edited values are recorded in `academic_item_changes`.
 
 ### REST endpoint for the web app
 
@@ -62,9 +62,9 @@ Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/text -Method Post -Cont
 Invoke-RestMethod -Uri 'http://127.0.0.1:8001/api/academic-items?item_type=assignment&review_state=verified&limit=20' -Method Get
 ```
 
-This endpoint only reads items already stored in `academic_items`. Manual text submissions currently create source revisions but do not yet extract academic items, so an empty result is expected until items are populated by later processing. The mistaken direct-item `POST /api/academic-items` route has been removed.
+This endpoint reads accepted items stored in `academic_items`, including those from manual text extraction. `GET /api/academic-items/{item_id}/evidence` shows the source excerpts, date wording, and review reasons behind an extracted item. `GET /api/sources/text/{source_document_id}/candidates` also shows the latest revision's candidates that need review and were not published as items. An ambiguous or date-only deadline stays `null` in `due_at` and is retained in the evidence response for review. The mistaken direct-item `POST /api/academic-items` route has been removed.
 
-Run the project-level checks from the repository root as shown in [`test/README.md`](../../test/README.md). Set `TEST_DATABASE_URL` to an initialized PostgreSQL database to also run the revision test; that test rolls its transaction back.
+Run the project-level checks from the repository root as shown in [`test/README.md`](../../test/README.md). Set `TEST_DATABASE_URL` to an initialized PostgreSQL database to also run revision and academic-persistence tests.
 
 ## Run locally
 

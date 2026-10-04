@@ -1,6 +1,7 @@
 """HTTP boundary for student-pasted plain text."""
 
 import json
+from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
@@ -8,16 +9,17 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from src.api.openapi import openapi_doc
-from src.api.schemas import ManualTextRequest, ManualTextResponse
+from src.api.schemas import ManualTextRequest, ManualTextResponse, SourceCandidateListResponse, SourceCandidateResponse
 from src.connectors.manual import prepare_manual_text
 from src.services.manual_text import save_manual_text
+from src.services.source_processing import list_latest_source_candidates, process_source_revision
 
 MAX_REQUEST_BYTES = 512 * 1024
 
 
 @openapi_doc(
     summary="Add or replace manual text source",
-    description="Accepts plain text and optional title/source_document_id to store source revisions.",
+    description="Stores plain text revisions and extracts supported academic items with Groq when configured.",
     request_model=ManualTextRequest,
     response_model=ManualTextResponse,
     responses={
@@ -65,6 +67,7 @@ async def add_manual_text(request: Request) -> JSONResponse:
 
     try:
         result = await save_manual_text(envelope)
+        processing = await process_source_revision(result.source_revision_id)
     except ValueError:
         return JSONResponse({"error": "Manual text source was not found."}, status_code=404)
     except (RuntimeError, SQLAlchemyError):
@@ -75,8 +78,33 @@ async def add_manual_text(request: Request) -> JSONResponse:
         source_revision_id=result.source_revision_id,
         revision_no=result.revision_no,
         created_revision=result.created_revision,
+        processing_status=processing.status,
+        academic_item_ids=processing.academic_item_ids,
+        review_count=processing.review_count,
     )
     return JSONResponse(
         response.model_dump(mode="json"),
         status_code=201 if submitted.source_document_id is None else 200,
     )
+
+
+@openapi_doc(
+    summary="List the latest manual source's extracted candidates",
+    response_model=SourceCandidateListResponse,
+    responses={"200": "Extracted candidates", "404": "Manual source not found", "503": "Storage unavailable"},
+)
+async def get_source_candidates(request: Request) -> JSONResponse:
+    try:
+        document_id = UUID(request.path_params["source_document_id"])
+    except ValueError:
+        return JSONResponse({"error": "Invalid source document ID."}, status_code=422)
+    try:
+        candidates = await list_latest_source_candidates(document_id)
+    except (RuntimeError, SQLAlchemyError):
+        return JSONResponse({"error": "Manual source storage is unavailable."}, status_code=503)
+    if candidates is None:
+        return JSONResponse({"error": "Manual source was not found."}, status_code=404)
+    response = SourceCandidateListResponse(
+        candidates=[SourceCandidateResponse.model_validate(candidate) for candidate in candidates]
+    )
+    return JSONResponse(response.model_dump(mode="json"))
