@@ -64,8 +64,10 @@ class _VisibleHTML(HTMLParser):
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
-        if not self.skip_tag and data.strip():
-            self.parts.append(data.strip() + " ")
+        if not self.skip_tag:
+            # Adjacent inline elements may split one word. Keep their exact
+            # boundary while turning source formatting whitespace into spaces.
+            self.parts.append(re.sub(r"\s+", " ", data))
 
 
 def _bound_clean_text(text: str) -> str:
