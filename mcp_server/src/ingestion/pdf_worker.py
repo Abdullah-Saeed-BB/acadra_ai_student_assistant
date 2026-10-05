@@ -43,7 +43,9 @@ def extract(data: bytes) -> dict[str, str]:
 def main() -> None:
     data = sys.stdin.buffer.read(MAX_FILE_BYTES + 1)
     result = extract(data)
-    sys.stdout.write(json.dumps(result, ensure_ascii=False))
+    # The worker can inherit a legacy Windows stdout encoding. JSON escapes keep
+    # extracted Unicode text intact without depending on that encoding.
+    sys.stdout.write(json.dumps(result, ensure_ascii=True))
 
 
 if __name__ == "__main__":
