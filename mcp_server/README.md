@@ -1,6 +1,6 @@
 # Study planner MCP server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text is versioned and, when Groq is configured, extracted into source-grounded academic items and change events. File/HTML intake, the full inbox, planning, and external connectors are still planned.
+This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text and uploaded HTML/PDF files are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. The full inbox, planning, and external connectors are still planned.
 
 The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application.
 
@@ -25,7 +25,7 @@ $env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_pla
 uv run db/init_db.py
 ```
 
-The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py`. The PostgreSQL user must have `CREATEDB` permission. Run it again after this update to create `source_item_links` and `source_processing_runs` in an existing database. This initializer does not update existing tables when the model changes.
+The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py`. The PostgreSQL user must have `CREATEDB` permission. Run it again after this update to create `source_files` in an existing database. This initializer does not update existing tables when the model changes.
 
 ## Manual text intake
 
@@ -54,6 +54,16 @@ Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/text -Method Post -Cont
 
 `POST /api/sources/text` returns `201 Created` for a new source and `200 OK` for a replacement. Include the returned `source_document_id` in a later request to replace that source; omit it to create a new one. Invalid input returns `400`, `413`, `415`, or `422` as appropriate; an unknown source ID returns `404`; unavailable storage returns `503`. The listener has no student authentication yet and must remain on loopback. A future frontend can proxy `/api` to this port.
 
+### Upload HTML or PDF files
+
+`POST /api/sources/files` accepts multipart form fields `file` (required), `title` (optional), and `source_document_id` (optional, for replacing an existing source of the same file type). It returns the same revision and processing fields as text intake. UTF-8 `.html` and `.htm` files may be up to 256 KiB. Text-bearing `.pdf` files may be up to 5 MiB and 20 pages. Extracted text is capped at 64 KiB. Image-only/scanned PDFs need OCR and are rejected; password-protected PDFs are also rejected. The parser does not fetch HTML resources or execute embedded content.
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/files -Method Post -Form @{ file = Get-Item 'C:\path\to\assignment.pdf'; title = 'Assignment handout' }
+```
+
+Original uploaded bytes are stored under `app/mcp_server/data/uploads/` (ignored by Git), with a hash and relative path in `source_files`. Uploaded revisions keep extracted `clean_text` for academic evidence and leave `raw_content` empty. Run the database initializer before the first upload.
+
 ### Retrieve academic items
 
 `GET /api/academic-items` reads saved academic records. Optional query parameters are `item_type` (`assignment`, `announcement`, `reading`, or `event`), `course_id` (UUID), `review_state` (`verified`, `uncertain`, or `conflicting`), `due_from` (inclusive), `due_before` (exclusive), `limit` (1–100, default 20), and `offset` (default 0). Date filters require an ISO 8601 date-time with a time zone. Results are ordered by due date with undated items last. The response contains `items`, `has_more`, and `next_offset` for paging.
@@ -62,7 +72,7 @@ Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/text -Method Post -Cont
 Invoke-RestMethod -Uri 'http://127.0.0.1:8001/api/academic-items?item_type=assignment&review_state=verified&limit=20' -Method Get
 ```
 
-This endpoint reads accepted items stored in `academic_items`, including those from manual text extraction. `GET /api/academic-items/{item_id}/evidence` shows the source excerpts, date wording, and review reasons behind an extracted item. `GET /api/sources/text/{source_document_id}/candidates` also shows the latest revision's candidates that need review and were not published as items. An ambiguous or date-only deadline stays `null` in `due_at` and is retained in the evidence response for review. The mistaken direct-item `POST /api/academic-items` route has been removed.
+This endpoint reads accepted items stored in `academic_items`, including those from manual text and file extraction. `GET /api/academic-items/{item_id}/evidence` shows the source excerpts, date wording, and review reasons behind an extracted item. `GET /api/sources/{source_document_id}/candidates` shows the latest revision's candidates that need review and were not published as items; the older `/api/sources/text/{source_document_id}/candidates` path also works. An ambiguous or date-only deadline stays `null` in `due_at` and is retained in the evidence response for review. The mistaken direct-item `POST /api/academic-items` route has been removed.
 
 Run the project-level checks from the repository root as shown in [`test/README.md`](../../test/README.md). Set `TEST_DATABASE_URL` to an initialized PostgreSQL database to also run revision and academic-persistence tests.
 

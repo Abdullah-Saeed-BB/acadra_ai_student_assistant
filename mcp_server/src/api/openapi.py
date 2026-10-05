@@ -10,6 +10,7 @@ def openapi_doc(
     summary: str | None = None,
     description: str | None = None,
     request_model: Type[BaseModel] | None = None,
+    request_body: dict[str, Any] | None = None,
     query_model: Type[BaseModel] | None = None,
     response_model: Type[BaseModel] | None = None,
     responses: dict[int | str, Any] | None = None,
@@ -24,6 +25,7 @@ def openapi_doc(
                 "summary": summary,
                 "description": description,
                 "request_model": request_model,
+                "request_body": request_body,
                 "query_model": query_model,
                 "response_model": response_model,
                 "responses": responses or {},
@@ -128,6 +130,8 @@ def build_openapi_spec(
                         }
                     },
                 }
+            elif meta.get("request_body"):
+                op_dict["requestBody"] = meta["request_body"]
 
             query_model = meta.get("query_model")
             if query_model and hasattr(query_model, "model_json_schema"):

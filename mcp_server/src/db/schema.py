@@ -62,6 +62,22 @@ class SourceRevision(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class SourceFile(Base):
+    """Original uploaded bytes kept outside raw_content, one file per revision."""
+
+    __tablename__ = "source_files"
+    __table_args__ = (UniqueConstraint("source_revision_id"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    source_revision_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("source_revisions.id"))
+    filename: Mapped[str] = mapped_column(Text)
+    media_type: Mapped[str] = mapped_column(Text)
+    byte_size: Mapped[int] = mapped_column(Integer)
+    content_sha256: Mapped[str] = mapped_column(Text)
+    storage_ref: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Course(Base):
     """Optional course context for normalized academic items."""
 

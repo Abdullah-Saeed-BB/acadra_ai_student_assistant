@@ -1,8 +1,10 @@
-"""Persist manual text sources and their immutable content revisions."""
+"""Persist manual text/file sources and their immutable content revisions."""
 
+import asyncio
 from dataclasses import dataclass
 from hashlib import sha256
 import os
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -10,7 +12,9 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.connectors.manual import ManualTextEnvelope
-from src.db.schema import SourceDocument, SourceRevision
+from src.db.schema import SourceDocument, SourceFile, SourceRevision
+
+UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "data" / "uploads"
 
 
 @dataclass(frozen=True)
@@ -19,10 +23,16 @@ class ManualTextSaveResult:
     source_revision_id: UUID
     revision_no: int
     created_revision: bool
+    file_storage_ref: str | None = None
 
 
 async def save_manual_text(envelope: ManualTextEnvelope) -> ManualTextSaveResult:
-    """Save a new source or replace one, serializing updates per document."""
+    """Backwards-compatible entry point for pasted text."""
+    return await save_manual_source(envelope)
+
+
+async def save_manual_source(envelope: ManualTextEnvelope) -> ManualTextSaveResult:
+    """Save a manual source, serializing updates per document."""
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL is required to save manual text.")
@@ -33,8 +43,15 @@ async def save_manual_text(envelope: ManualTextEnvelope) -> ManualTextSaveResult
     engine = create_async_engine(url.set(drivername="postgresql+asyncpg"))
     try:
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            async with session.begin():
-                return await _save_in_transaction(session, envelope)
+            result = None
+            try:
+                async with session.begin():
+                    result = await _save_in_transaction(session, envelope)
+                return result
+            except Exception:
+                if result and result.file_storage_ref:
+                    await asyncio.to_thread((Path(__file__).resolve().parents[2] / result.file_storage_ref).unlink, missing_ok=True)
+                raise
     finally:
         await engine.dispose()
 
@@ -46,9 +63,9 @@ async def _save_in_transaction(
         document = SourceDocument(
             id=uuid4(),
             connection_id=None,
-            source_type="text",
+            source_type=envelope.source_type,
             external_id=None,
-            original_ref=None,
+            original_ref=envelope.original_ref,
             title=envelope.title or "Pasted text",
             course_hint=None,
             source_updated_at=None,
@@ -62,11 +79,13 @@ async def _save_in_transaction(
             .where(SourceDocument.id == envelope.source_document_id)
             .with_for_update()
         )
-        if document is None or document.source_type != "text" or document.connection_id is not None:
-            raise ValueError("Manual text source was not found.")
+        if document is None or document.source_type != envelope.source_type or document.connection_id is not None:
+            raise ValueError("Manual source was not found or its file type differs.")
         document.last_seen_at = envelope.observed_at
         if envelope.title is not None:
             document.title = envelope.title
+        if envelope.original_ref is not None:
+            document.original_ref = envelope.original_ref
 
     latest = await session.scalar(
         select(SourceRevision)
@@ -90,4 +109,30 @@ async def _save_in_transaction(
     )
     session.add(revision)
     await session.flush()
-    return ManualTextSaveResult(document.id, revision.id, revision.revision_no, True)
+    storage_ref = None
+    if envelope.file_bytes is not None:
+        suffix = ".html" if envelope.source_type == "html" else ".pdf"
+        filename = f"{revision.id}{suffix}"
+        path = UPLOAD_ROOT / filename
+        try:
+            await asyncio.to_thread(_write_uploaded_file, path, envelope.file_bytes)
+            storage_ref = str(Path("data") / "uploads" / filename)
+            session.add(SourceFile(
+                id=uuid4(), source_revision_id=revision.id,
+                filename=envelope.original_ref or filename,
+                media_type=envelope.media_type or "application/octet-stream",
+                byte_size=len(envelope.file_bytes),
+                content_sha256=sha256(envelope.file_bytes).hexdigest(),
+                storage_ref=storage_ref, created_at=envelope.observed_at,
+            ))
+            await session.flush()
+        except Exception:
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+            raise
+    return ManualTextSaveResult(document.id, revision.id, revision.revision_no, True, storage_ref)
+
+
+def _write_uploaded_file(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("xb") as output:
+        output.write(data)

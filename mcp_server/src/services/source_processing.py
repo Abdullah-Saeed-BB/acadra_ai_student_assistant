@@ -50,7 +50,7 @@ async def list_latest_source_candidates(document_id: UUID) -> list[SourceCandida
     try:
         async with AsyncSession(engine) as session:
             document = await session.get(SourceDocument, document_id)
-            if document is None or document.source_type != "text":
+            if document is None or document.source_type not in {"text", "html", "pdf"}:
                 return None
             latest_id = await session.scalar(
                 select(SourceRevision.id).where(SourceRevision.source_document_id == document_id)
@@ -125,7 +125,7 @@ async def process_source_revision(revision_id: UUID) -> ProcessingResult:
             if revision is None:
                 raise ValueError("Source revision was not found.")
             document = await session.get(SourceDocument, revision.source_document_id)
-            if document is None or document.source_type != "text":
+            if document is None or document.source_type not in {"text", "html", "pdf"}:
                 raise ValueError("Manual text source was not found.")
             successful = await session.scalar(
                 select(SourceProcessingRun.id).where(
