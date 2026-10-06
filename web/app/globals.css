@@ -42,10 +42,27 @@ button, input, textarea { font: inherit; }
 .submit-button:hover:not(:disabled) { background: #173f66; }
 .submit-button:disabled { opacity: .6; cursor: wait; }
 
+.page-link, .page-nav a { color: var(--accent); font-weight: 600; text-underline-offset: 3px; }
+.page-link { display: inline-block; margin-top: 18px; }
+.page-nav { margin-bottom: 28px; }
+.gmail-status { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; padding: 20px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.gmail-status h2 { margin: 0 0 5px; font-size: 1rem; }
+.gmail-status p { margin: 0; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.status-pill { flex: none; padding: 6px 10px; border-radius: 999px; background: #edf0f3; color: #3f4d5b; font-size: .82rem; font-weight: 600; }
+.status-pill.connected { background: #e8f5ec; color: #24633b; }
+.gmail-form .field textarea { min-height: 140px; }
+.gmail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.connect-button { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 20px; border: 1px solid var(--accent); border-radius: 8px; color: var(--accent); font-weight: 600; text-decoration: none; }
+.connect-button:hover:not(.disabled) { background: #f0f6fb; }
+.connect-button.disabled { opacity: .5; cursor: not-allowed; }
+.gmail-privacy { margin: 18px 4px 0; color: var(--muted); font-size: .9rem; line-height: 1.6; }
+
 @media (max-width: 600px) {
   .page-shell { padding: 36px 16px; }
   .entry-form { padding: 22px 18px; }
   .choice-row { flex-direction: column; }
   .choice { width: 100%; }
   .submit-button { width: 100%; }
+  .gmail-status { align-items: flex-start; flex-direction: column; }
+  .gmail-actions > * { width: 100%; justify-content: center; }
 }

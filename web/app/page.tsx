@@ -114,6 +114,7 @@ export default function Home() {
         <header className="page-header">
           <h1>Add a source</h1>
           <p>Enter information for your study workspace. Paste text or upload an HTML or PDF file.</p>
+          <a className="page-link" href="/gmail">Set up Gmail →</a>
         </header>
 
         <form className="entry-form" onSubmit={submit}>
