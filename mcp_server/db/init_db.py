@@ -1,5 +1,6 @@
 """Create the PostgreSQL database and tables declared in src.db.schema."""
 
+import argparse
 import asyncio
 import os
 
@@ -33,6 +34,16 @@ async def create_database_if_missing(url: URL) -> None:
 
 
 async def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Create the PostgreSQL database and tables declared in src.db.schema."
+    )
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Override the database name from DATABASE_URL.",
+    )
+    args = parser.parse_args()
+
     load_dotenv()
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
@@ -42,6 +53,8 @@ async def main() -> None:
     if url.drivername not in {"postgresql", "postgresql+asyncpg"}:
         raise SystemExit("DATABASE_URL must use postgresql:// or postgresql+asyncpg://.")
     url = url.set(drivername="postgresql+asyncpg")
+    if args.db:
+        url = url.set(database=args.db)
     if not url.database:
         raise SystemExit("DATABASE_URL must include a database name.")
 
