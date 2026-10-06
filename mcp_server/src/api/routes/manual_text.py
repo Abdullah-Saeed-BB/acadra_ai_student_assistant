@@ -115,8 +115,22 @@ async def add_manual_file(request: Request) -> JSONResponse:
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if content_type != "multipart/form-data":
         return JSONResponse({"error": "Content-Type must be multipart/form-data."}, status_code=415)
+
+    body_bytes = 0
+    original_receive = request.receive
+
+    async def bounded_receive():
+        nonlocal body_bytes
+        message = await original_receive()
+        if message["type"] == "http.request":
+            body_bytes += len(message.get("body", b""))
+            if body_bytes > MAX_FILE_BODY_BYTES:
+                raise ManualFileTooLarge("Upload request body is too large.")
+        return message
+
+    bounded_request = Request(request.scope, receive=bounded_receive)
     try:
-        async with request.form(max_files=1, max_fields=2, max_part_size=16 * 1024) as form:
+        async with bounded_request.form(max_files=1, max_fields=2, max_part_size=16 * 1024) as form:
             if set(form.keys()) - {"file", "title", "source_document_id"}:
                 return JSONResponse({"error": "Unexpected form field."}, status_code=422)
             upload = form.get("file")

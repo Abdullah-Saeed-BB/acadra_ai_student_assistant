@@ -18,7 +18,7 @@ MAX_PDF_BYTES = 5 * 1024 * 1024
 MAX_CLEAN_TEXT_BYTES = 64 * 1024
 PDF_TIMEOUT_SECONDS = 20
 
-_IGNORED_TAGS = {"script", "style", "template", "head", "svg", "iframe", "object"}
+_IGNORED_TAGS = {"script", "style", "template", "head", "svg", "iframe", "object", "nav", "footer"}
 _VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 _BLOCK_TAGS = {
     "address", "article", "blockquote", "br", "dd", "div", "dl", "dt", "h1", "h2",

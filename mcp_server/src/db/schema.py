@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, Text, Uuid, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -17,12 +17,21 @@ class SourceConnection(Base):
     """Local source accounts; credential_ref points to the secret store."""
 
     __tablename__ = "source_connections"
+    __table_args__ = (
+        Index(
+            "uq_single_gmail_connection", "source_type", unique=True,
+            postgresql_where=text("source_type = 'gmail'"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     source_type: Mapped[str] = mapped_column(Text)
     account_label: Mapped[str] = mapped_column(Text)
     external_account_id: Mapped[str | None] = mapped_column(Text)
     credential_ref: Mapped[str | None] = mapped_column(Text)
+    allowed_senders: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'")
+    )
     status: Mapped[str] = mapped_column(Text)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

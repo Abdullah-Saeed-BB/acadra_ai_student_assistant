@@ -1,6 +1,6 @@
 # Study planner MCP server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text and uploaded HTML/PDF files are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. The full inbox, planning, and external connectors are still planned.
+This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text and uploaded HTML/PDF files are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail account and sender configuration are available; Gmail message import, the full inbox, and planning are still planned.
 
 The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application.
 
@@ -25,7 +25,17 @@ $env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_pla
 uv run db/init_db.py
 ```
 
-The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py`. The PostgreSQL user must have `CREATEDB` permission. Run it again after this update to create `source_files` in an existing database. This initializer does not update existing tables when the model changes.
+The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py` using SQLAlchemy metadata. The PostgreSQL user must have `CREATEDB` permission. Since this is a fresh database, run the initializer once to create `source_connections` with `allowed_senders`. `create_all` does not change existing tables if the schema evolves later.
+
+## Gmail connection setup
+
+Set `ACADRA_GMAIL_CLIENT_ID` and `ACADRA_GMAIL_CLIENT_SECRET` in `app/mcp_server/.env`. In Google Cloud Console, register `http://127.0.0.1:8001/api/connections/gmail/callback` as an authorized redirect URI for a Web application OAuth client. Set `ACADRA_GMAIL_REDIRECT_URI` to that exact URI if you use a different local API port. `ACADRA_WEB_URL` defaults to `http://localhost:3000` for returning to the web page after consent. Keep the API bound to loopback; it has no student authentication yet.
+
+Open `http://localhost:3000/gmail` after starting the API and web app. Enter 1–50 exact sender addresses, save them, then select **Continue with Google**. `GET` and `PUT /api/connections/gmail` expose the saved configuration; `GET /api/connections/gmail/authorize` and `/callback` handle Google OAuth. The client ID and secret stay on the backend. The Google refresh token is placed in the operating system credential manager and only its reference is saved in `source_connections`. A working OS credential manager is required to finish OAuth.
+
+The included Uvicorn entry points disable access logs so OAuth callback codes do not appear in request logs. If you run the ASGI app behind another server or proxy, disable or redact query-string logging on this callback there too.
+
+This step saves account authorization and the sender allowlist only. It does **not** fetch Gmail messages or send email to Groq. The `gmail.readonly` Google permission covers the Gmail account; the exact sender list is an application processing rule for the upcoming importer, not a Google permission boundary.
 
 ## Manual text intake
 

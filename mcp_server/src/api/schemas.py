@@ -5,7 +5,28 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from src.connectors.gmail import normalize_allowed_senders
+
+
+class GmailConfigurationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed_senders: list[str] = Field(min_length=1, max_length=50)
+
+    @field_validator("allowed_senders")
+    @classmethod
+    def normalize_senders(cls, values: list[str]) -> list[str]:
+        return normalize_allowed_senders(values)
+
+
+class GmailConnectionResponse(BaseModel):
+    connection_id: UUID | None
+    account_email: str | None
+    allowed_senders: list[str]
+    status: Literal["not_configured", "not_connected", "connected"]
+    oauth_configured: bool
 
 
 class ManualTextRequest(BaseModel):
