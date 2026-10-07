@@ -22,6 +22,20 @@ async def save_gmail_refresh_token(token: str) -> str:
     return f"keyring:{SERVICE_NAME}:{secret_id}"
 
 
+async def load_gmail_refresh_token(credential_ref: str) -> str:
+    """Read an existing Gmail secret without placing it in the database."""
+    _require_secure_backend()
+    prefix = f"keyring:{SERVICE_NAME}:"
+    if not credential_ref.startswith(prefix):
+        raise ValueError("Invalid Gmail credential reference.")
+    token = await asyncio.to_thread(
+        keyring.get_password, SERVICE_NAME, credential_ref[len(prefix):]
+    )
+    if not token:
+        raise RuntimeError("The Gmail credential is missing. Reconnect the account.")
+    return token
+
+
 async def delete_gmail_refresh_token(credential_ref: str) -> None:
     _require_secure_backend()
     prefix = f"keyring:{SERVICE_NAME}:"

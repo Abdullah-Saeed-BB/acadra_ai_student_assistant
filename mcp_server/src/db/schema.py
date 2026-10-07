@@ -36,6 +36,18 @@ class SourceConnection(Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class GmailPollCursor(Base):
+    """Last fully observed Gmail history position for the console poller."""
+
+    __tablename__ = "gmail_poll_cursors"
+
+    connection_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("source_connections.id"), primary_key=True
+    )
+    history_id: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class SourceDocument(Base):
     """Fetched or manually supplied material and its original reference."""
 

@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 mcp-server = "src.server:main"
 api-server = "src.api.app:main"
+gmail-poll = "src.jobs.gmail_poll:main"
 
 [build-system]
 requires = ["hatchling>=1.26,<2"]

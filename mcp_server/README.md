@@ -1,6 +1,6 @@
 # Study planner MCP server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text and uploaded HTML/PDF files are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail account and sender configuration are available; Gmail message import, the full inbox, and planning are still planned.
+This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text and uploaded HTML/PDF files are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail account configuration and a console polling worker are available; Gmail message import, the full inbox, and planning are still planned.
 
 The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application.
 
@@ -35,7 +35,19 @@ Open `http://localhost:3000/gmail` after starting the API and web app. Enter 1â€
 
 The included Uvicorn entry points disable access logs so OAuth callback codes do not appear in request logs. If you run the ASGI app behind another server or proxy, disable or redact query-string logging on this callback there too.
 
-This step saves account authorization and the sender allowlist only. It does **not** fetch Gmail messages or send email to Groq. The `gmail.readonly` Google permission covers the Gmail account; the exact sender list is an application processing rule for the upcoming importer, not a Google permission boundary.
+The `gmail.readonly` Google permission covers the Gmail account; the exact sender list is an application processing rule, not a Google permission boundary.
+
+### Print newly arrived Gmail messages
+
+After connecting the account, run the database initializer again to create the new `gmail_poll_cursors` table, then start this worker in a separate terminal from `app/mcp_server`:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.jobs.gmail_poll
+```
+
+`uv run gmail-poll` is equivalent when `uv` is available. It checks Gmail every 60 seconds while running. On its **first** check it records the current Gmail history position; it prints only messages that arrive afterward from the configured exact sender addresses. Output is one JSON line per matching message with `id`, `sender`, `subject`, and bounded plain-text `content`. HTML-only messages are converted to text; attachments are ignored. Add `--once` to perform one check and exit. The worker uses the already connected account's stored refresh token and existing OAuth client settings. It does not save email bodies, create source revisions, or call Groq.
+
+The history cursor advances only after the complete check succeeds. A failed request is retried on the next minute; a process interruption between printing and cursor storage can print the same message again. If Gmail reports that its history cursor has expired, the worker stops with an error rather than skip messages; full-rescan recovery is a later connector step. Run only one worker instance per connected account. The printed content is private, so use a local terminal and avoid capturing its output in shared logs.
 
 ## Manual text intake
 
