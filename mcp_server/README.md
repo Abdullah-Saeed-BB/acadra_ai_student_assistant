@@ -1,6 +1,6 @@
 # Study planner MCP server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text and uploaded HTML/PDF files are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail account configuration and a console polling worker are available; Gmail message import, the full inbox, and planning are still planned.
+This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text, uploaded HTML/PDF files, and incoming Gmail subject/body text are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail polling and durable extraction retries are implemented; the full inbox and planning are still planned.
 
 The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application.
 
@@ -37,17 +37,24 @@ The included Uvicorn entry points disable access logs so OAuth callback codes do
 
 The `gmail.readonly` Google permission covers the Gmail account; the exact sender list is an application processing rule, not a Google permission boundary.
 
-### Print newly arrived Gmail messages
+### Process newly arrived Gmail messages
 
-After connecting the account, run the database initializer again to create the new `gmail_poll_cursors` table, then start this worker in a separate terminal from `app/mcp_server`:
+After connecting the account, stop any older polling worker. From `app/mcp_server`, apply the migration to an existing database and start the worker in a separate terminal:
 
 ```powershell
+.\.venv\Scripts\python.exe -m db.migrate_gmail_ingestion
 .\.venv\Scripts\python.exe -m src.jobs.gmail_poll
 ```
 
-`uv run gmail-poll` is equivalent when `uv` is available. It checks Gmail every 60 seconds while running. On its **first** check it records the current Gmail history position; it prints only messages that arrive afterward from the configured exact sender addresses. Output is one JSON line per matching message with `id`, `sender`, `subject`, and bounded plain-text `content`. HTML-only messages are converted to text; attachments are ignored. Add `--once` to perform one check and exit. The worker uses the already connected account's stored refresh token and existing OAuth client settings. It does not save email bodies, create source revisions, or call Groq.
+`uv run gmail-poll` is equivalent when `uv` is available. It checks Gmail every 60 seconds while running. On its **first** check it records the current Gmail history position; only later arrivals from configured exact sender addresses are imported. Existing cursors resume where the previous worker stopped. Messages printed by the old worker before that cursor are not imported retroactively. The worker uses the connected account's stored refresh token and existing OAuth settings.
 
-The history cursor advances only after the complete check succeeds. A failed request is retried on the next minute; a process interruption between printing and cursor storage can print the same message again. If Gmail reports that its history cursor has expired, the worker stops with an error rather than skip messages; full-rescan recovery is a later connector step. Run only one worker instance per connected account. The printed content is private, so use a local terminal and avoid capturing its output in shared logs.
+Each message is sanitized and saved as a source revision before the mailbox cursor advances. Identity is connection + Gmail message ID (not thread ID); unchanged replays reuse their source, revision, and academic items. Subject and body are limited to 64 KiB of clean UTF-8 text. HTML active content and common quoted-reply sections are removed; attachments are ignored. Malformed, oversized, or unsupported bodies receive a durable rejection code. No raw MIME is retained; sanitized text stays in the database for evidence.
+
+The worker processes a durable queue in the background through the same Groq extraction and validation used for manual input. Set `GROQ_API_KEY` as for manual processing. Accepted items, evidence, and change events are committed together and available through `/api/academic-items`, its evidence endpoint, and `/api/sources/{source_document_id}/candidates`. Unknown course associations and ambiguous deadlines remain flagged for review. Different emails remain separate sources; uncertain identity changes within a revision are left unpublished for review.
+
+Console JSON now contains intake/processing status and source/academic IDs instead of email bodies. Failed extraction remains queued with exponential retry delays (2 minutes up to 1 hour); missing Groq configuration retries every minute. Leases allow interrupted processing to resume after restart. The poll loop continues while extraction runs. `--once` performs one poll and drains up to 10 eligible queued messages before exiting; it does not wait through retry delays.
+
+A fetch or storage failure leaves the cursor unchanged, while a saved extraction failure does not block later mail. Sender scope is checked at intake and again before publishing. If Gmail reports an expired history cursor, the worker stops with an error; full-rescan recovery remains a later step. Run only one polling worker per connected account. The migration adds `gmail_ingestion` and uniqueness indexes; it preserves existing records and stops if old duplicate source identities require review. Fresh databases get these through `db.init_db`.
 
 ## Manual text intake
 

@@ -178,9 +178,9 @@ async def add_manual_file(request: Request) -> JSONResponse:
 
 
 @openapi_doc(
-    summary="List the latest manual source's extracted candidates",
+    summary="List the latest source's extracted candidates",
     response_model=SourceCandidateListResponse,
-    responses={"200": "Extracted candidates", "404": "Manual source not found", "503": "Storage unavailable"},
+    responses={"200": "Extracted candidates", "404": "Source not found", "503": "Storage unavailable"},
 )
 async def get_source_candidates(request: Request) -> JSONResponse:
     try:
@@ -190,9 +190,9 @@ async def get_source_candidates(request: Request) -> JSONResponse:
     try:
         candidates = await list_latest_source_candidates(document_id)
     except (RuntimeError, SQLAlchemyError):
-        return JSONResponse({"error": "Manual source storage is unavailable."}, status_code=503)
+        return JSONResponse({"error": "Source storage is unavailable."}, status_code=503)
     if candidates is None:
-        return JSONResponse({"error": "Manual source was not found."}, status_code=404)
+        return JSONResponse({"error": "Source was not found."}, status_code=404)
     response = SourceCandidateListResponse(
         candidates=[SourceCandidateResponse.model_validate(candidate) for candidate in candidates]
     )

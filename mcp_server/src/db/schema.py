@@ -37,7 +37,7 @@ class SourceConnection(Base):
 
 
 class GmailPollCursor(Base):
-    """Last fully observed Gmail history position for the console poller."""
+    """Last durably ingested Gmail history position."""
 
     __tablename__ = "gmail_poll_cursors"
 
@@ -52,6 +52,10 @@ class SourceDocument(Base):
     """Fetched or manually supplied material and its original reference."""
 
     __tablename__ = "source_documents"
+    __table_args__ = (
+        Index("uq_source_provider_identity", "connection_id", "source_type", "external_id",
+              unique=True, postgresql_where=text("external_id IS NOT NULL")),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     connection_id: Mapped[UUID | None] = mapped_column(
@@ -70,6 +74,9 @@ class SourceRevision(Base):
     """A source snapshot used for change detection and precise citations."""
 
     __tablename__ = "source_revisions"
+    __table_args__ = (
+        Index("uq_source_revision_number", "source_document_id", "revision_no", unique=True),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     source_document_id: Mapped[UUID] = mapped_column(
@@ -80,6 +87,24 @@ class SourceRevision(Base):
     raw_content: Mapped[str | None] = mapped_column(Text)
     clean_text: Mapped[str] = mapped_column(Text)
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GmailIngestion(Base):
+    """Durable email intake outcome and retry state; contains no message body."""
+
+    __tablename__ = "gmail_ingestion"
+
+    connection_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("source_connections.id"), primary_key=True
+    )
+    message_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    source_revision_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("source_revisions.id"))
+    sender: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(Text)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from src.db.schema import AcademicItem, SourceDocument, SourceItemLink
+from src.db.schema import AcademicItem, SourceDocument, SourceItemLink, SourceRevision
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,9 @@ class AcademicItemEvidence:
     evidence: dict
     review_reasons: list[str]
     date_facts: dict
+    original_ref: str | None = None
+    source_updated_at: datetime | None = None
+    observed_at: datetime | None = None
 
 
 async def get_academic_item_evidence(item_id: UUID) -> AcademicItemEvidence | None:
@@ -51,18 +54,21 @@ async def get_academic_item_evidence(item_id: UUID) -> AcademicItemEvidence | No
     try:
         async with AsyncSession(engine) as session:
             row = (await session.execute(
-                select(SourceItemLink, SourceDocument).join(
+                select(SourceItemLink, SourceDocument, SourceRevision).join(
                     SourceDocument, SourceDocument.id == SourceItemLink.source_document_id
-                ).where(SourceItemLink.academic_item_id == item_id).limit(1)
+                ).join(SourceRevision, SourceRevision.id == SourceItemLink.source_revision_id)
+                .where(SourceItemLink.academic_item_id == item_id).limit(1)
             )).first()
             if row is None:
                 return None
-            link, document = row
+            link, document, revision = row
             return AcademicItemEvidence(
                 source_document_id=document.id, source_revision_id=link.source_revision_id,
                 source_title=document.title, source_type=document.source_type,
                 evidence=link.evidence, review_reasons=link.review_reasons,
                 date_facts=link.date_facts,
+                original_ref=document.original_ref, source_updated_at=revision.source_updated_at,
+                observed_at=revision.observed_at,
             )
     finally:
         await engine.dispose()

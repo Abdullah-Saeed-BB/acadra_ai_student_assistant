@@ -1,4 +1,4 @@
-"""Turn an immutable manual-source revision into accepted academic facts."""
+"""Turn an immutable source revision into accepted academic facts."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.db.schema import (
-    AcademicItem, AcademicItemChange, SourceDocument, SourceItemLink,
+    AcademicItem, AcademicItemChange, SourceDocument, SourceItemLink, SourceConnection, GmailIngestion,
     SourceProcessingRun, SourceRevision,
 )
 from src.ingestion.extraction import NormalizedCandidate, extract_academic_candidates
@@ -50,7 +50,7 @@ async def list_latest_source_candidates(document_id: UUID) -> list[SourceCandida
     try:
         async with AsyncSession(engine) as session:
             document = await session.get(SourceDocument, document_id)
-            if document is None or document.source_type not in {"text", "html", "pdf"}:
+            if document is None or document.source_type not in {"text", "html", "pdf", "gmail"}:
                 return None
             latest_id = await session.scalar(
                 select(SourceRevision.id).where(SourceRevision.source_document_id == document_id)
@@ -109,6 +109,16 @@ async def _record_failure(engine, revision_id: UUID, error_code: str, started_at
             ))
 
 
+async def _source_authorized(session: AsyncSession, document: SourceDocument, revision_id: UUID) -> bool:
+    if document.source_type != "gmail":
+        return True
+    connection = await session.get(SourceConnection, document.connection_id)
+    receipt = await session.get(GmailIngestion, (document.connection_id, document.external_id))
+    return bool(connection and connection.status == "connected" and receipt
+                and receipt.source_revision_id == revision_id
+                and receipt.sender in connection.allowed_senders)
+
+
 async def process_source_revision(revision_id: UUID) -> ProcessingResult:
     """Extract outside the transaction; atomically publish the resulting facts."""
     database_url = os.getenv("DATABASE_URL")
@@ -125,8 +135,10 @@ async def process_source_revision(revision_id: UUID) -> ProcessingResult:
             if revision is None:
                 raise ValueError("Source revision was not found.")
             document = await session.get(SourceDocument, revision.source_document_id)
-            if document is None or document.source_type not in {"text", "html", "pdf"}:
-                raise ValueError("Manual text source was not found.")
+            if document is None or document.source_type not in {"text", "html", "pdf", "gmail"}:
+                raise ValueError("Supported source was not found.")
+            if not await _source_authorized(session, document, revision_id):
+                return ProcessingResult("scope_changed", [])
             successful = await session.scalar(
                 select(SourceProcessingRun.id).where(
                     SourceProcessingRun.source_revision_id == revision_id,
@@ -155,6 +167,12 @@ async def process_source_revision(revision_id: UUID) -> ProcessingResult:
 
         async with AsyncSession(engine) as session:
             async with session.begin():
+                # Use the same account -> document lock order as Gmail intake.
+                # Scope changes cannot race the final authorization and commit.
+                if document.source_type == "gmail":
+                    await session.scalar(select(SourceConnection).where(
+                        SourceConnection.id == document.connection_id,
+                    ).with_for_update())
                 document = await session.scalar(
                     select(SourceDocument).where(SourceDocument.id == document_id).with_for_update()
                 )
@@ -164,6 +182,8 @@ async def process_source_revision(revision_id: UUID) -> ProcessingResult:
                 )
                 if latest_id != revision_id:
                     return ProcessingResult("superseded", [])
+                if not await _source_authorized(session, document, revision_id):
+                    return ProcessingResult("scope_changed", [])
                 successful = await session.scalar(
                     select(SourceProcessingRun.id).where(
                         SourceProcessingRun.source_revision_id == revision_id,
@@ -172,7 +192,10 @@ async def process_source_revision(revision_id: UUID) -> ProcessingResult:
                 )
                 if successful:
                     return ProcessingResult("already_processed", [])
-                result = await _persist_candidates(session, document_id, revision_id, candidates)
+                result = await _persist_candidates(
+                    session, document_id, revision_id, candidates,
+                    conservative_identity=document.source_type == "gmail",
+                )
                 session.add(SourceProcessingRun(
                     id=uuid4(), source_revision_id=revision_id, status="processed",
                     error_code=None, item_count=len(result.academic_item_ids),
@@ -186,6 +209,7 @@ async def process_source_revision(revision_id: UUID) -> ProcessingResult:
 async def _persist_candidates(
     session: AsyncSession, document_id: UUID, revision_id: UUID,
     candidates: list[NormalizedCandidate],
+    *, conservative_identity: bool = False,
 ) -> ProcessingResult:
     """Called inside the document lock and caller's transaction."""
     now = datetime.now(timezone.utc)
@@ -196,6 +220,8 @@ async def _persist_candidates(
             select(SourceItemLink).where(SourceItemLink.source_document_id == document_id)
         )).all()
     }
+    had_prior_items = any(link.academic_item_id and link.source_revision_id != revision_id
+                          for link in existing.values())
     item_ids: list[UUID] = []
     review_count = 0
     for index, candidate in enumerate(candidates):
@@ -207,6 +233,9 @@ async def _persist_candidates(
             reasons.append("Identity collides with another item in this source")
         publishable = candidate.publishable and not duplicate
         link = existing.get(key)
+        if conservative_identity and had_prior_items and (link is None or link.academic_item_id is None):
+            publishable = False
+            reasons.append("Changed source item identity needs review before creating or replacing a fact")
         prior_evidence = dict(link.evidence) if link else {}
         prior_dates = dict(link.date_facts) if link else {}
         prior_revision_id = link.source_revision_id if link else None

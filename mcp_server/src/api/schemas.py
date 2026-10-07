@@ -109,6 +109,9 @@ class AcademicItemEvidenceResponse(BaseModel):
     evidence: dict[str, str | None]
     review_reasons: list[str]
     date_facts: dict[str, dict[str, str | None]]
+    original_ref: str | None = None
+    source_updated_at: datetime | None = None
+    observed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
