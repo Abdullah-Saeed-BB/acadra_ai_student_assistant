@@ -650,7 +650,8 @@ async def _invoke_with_backoff(text: str, title: str, max_items: int, hint: str 
             retryable = getattr(exc, "status_code", None) in RETRYABLE_STATUS
             if not retryable or attempt >= RATE_LIMIT_ATTEMPTS - 1:
                 raise
-            await asyncio.sleep(_retry_delay(exc, delay))
+            backoff = _retry_delay(exc, delay)
+            await asyncio.sleep(backoff if backoff > 0 else delay)
             delay = min(delay * 2, 30.0)
     raise RuntimeError("rate-limit retry loop exited unexpectedly")
 
