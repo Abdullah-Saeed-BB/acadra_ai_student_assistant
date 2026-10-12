@@ -1,4 +1,4 @@
-"""Restricted Groq extraction: source text is data, never tool authority.
+"""Restricted LLM extraction: source text is data, never tool authority.
 
 The extractor runs as a bounded map/reduce pipeline instead of one all-or-nothing
 call:
@@ -29,9 +29,14 @@ import os
 import re
 from typing import Any, Literal, TypedDict
 
+from langchain.chat_models import init_chat_model
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
-from groq import APIStatusError
+
+try:
+    from groq import APIStatusError
+except ImportError:
+    APIStatusError = None  # type: ignore[misc, assignment]
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
 from src.ingestion.chunking import (
@@ -163,29 +168,53 @@ def _item_cap_for(text: str) -> int:
     return max(minimum, min(maximum, len(text) // 180 + 4))
 
 
-_model: ChatGroq | None = None
-_model_name: str | None = None
+_model: BaseChatModel | None = None
+_model_cache_key: tuple[str, str, int, int, int, str | None] | None = None
 _structured_cache: dict[int, Any] = {}
 
 
-def _get_model() -> ChatGroq:
-    """Return the shared Groq client, rebuilt only when the model name changes."""
-    global _model, _model_name
-    name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    if _model is None or name != _model_name:
-        effort = (os.getenv("GROQ_REASONING_EFFORT", "low") or "").strip().lower()
-        if effort not in {"low", "medium", "high"}:
-            effort = None
-        _model = ChatGroq(
-            model=name,
-            temperature=0,
-            timeout=_env_int("GROQ_REQUEST_TIMEOUT", 60),
-            max_retries=_env_int("GROQ_MAX_RETRIES", 2),
-            max_tokens=_env_int("EXTRACTION_MAX_OUTPUT_TOKENS", 4096),
-            reasoning_effort=effort,
-            reasoning_format="hidden",
-        )
-        _model_name = name
+def _get_model() -> BaseChatModel:
+    """Return the shared chat model client initialized via init_chat_model."""
+    global _model, _model_cache_key
+    provider = os.getenv("MODEL_PROVIDER", "groq").strip()
+    name = os.getenv("MODEL_NAME") or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    timeout = _env_int("MODEL_REQUEST_TIMEOUT", _env_int("MODEL_TIMEOUT", _env_int("GROQ_REQUEST_TIMEOUT", 60)))
+    max_retries = _env_int("MODEL_MAX_RETRIES", _env_int("GROQ_MAX_RETRIES", 2))
+    max_tokens = _env_int("EXTRACTION_MAX_OUTPUT_TOKENS", 4096)
+    effort = (os.getenv("MODEL_REASONING_EFFORT") or os.getenv("GROQ_REASONING_EFFORT", "low") or "").strip().lower()
+    if effort not in {"low", "medium", "high"}:
+        effort = None
+
+    cache_key = (provider, name, timeout, max_retries, max_tokens, effort)
+    if _model is None or cache_key != _model_cache_key:
+        kwargs: dict[str, Any] = {
+            "temperature": 0,
+            "timeout": timeout,
+            "max_retries": max_retries,
+            "max_tokens": max_tokens,
+        }
+        if provider.lower() == "groq":
+            if effort:
+                kwargs["reasoning_effort"] = effort
+            kwargs["reasoning_format"] = "hidden"
+        elif effort:
+            kwargs["reasoning_effort"] = effort
+
+        if provider.lower() == "openrouter":
+            _model = init_chat_model(
+                model=name,
+                model_provider="openai",
+                base_url="https://openrouter.ai/api/v1",
+                api_key=os.getenv("OPENROUTER_API_KEY"),
+                **kwargs,
+            )
+        else:
+            _model = init_chat_model(
+                name,
+                model_provider=provider,
+                **kwargs,
+            )
+        _model_cache_key = cache_key
         _structured_cache.clear()
     return _model
 
@@ -487,6 +516,12 @@ def _is_schema_failure(exc: BaseException) -> bool:
     return "max completion tokens" in message or "failed to validate json" in message
 
 
+def _is_api_status_error(exc: BaseException) -> bool:
+    if APIStatusError is not None and isinstance(exc, APIStatusError):
+        return True
+    return hasattr(exc, "status_code") or hasattr(exc, "response")
+
+
 def _is_request_too_large(exc: BaseException) -> bool:
     if getattr(exc, "status_code", None) == 413:
         return True
@@ -646,8 +681,9 @@ async def _invoke_with_backoff(text: str, title: str, max_items: int, hint: str 
     for attempt in range(RATE_LIMIT_ATTEMPTS):
         try:
             return await _invoke_structured(text, title, max_items, hint)
-        except APIStatusError as exc:
-            retryable = getattr(exc, "status_code", None) in RETRYABLE_STATUS
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None)
+            retryable = _is_api_status_error(exc) and status_code in RETRYABLE_STATUS
             if not retryable or attempt >= RATE_LIMIT_ATTEMPTS - 1:
                 raise
             backoff = _retry_delay(exc, delay)
@@ -670,8 +706,8 @@ async def _extract_segment(text: str, title: str, depth: int) -> tuple[list[Extr
     for _ in range(SCHEMA_RETRIES + 1):
         try:
             return await _invoke_with_backoff(text, title, max_items, hint), True
-        except APIStatusError as exc:
-            if not (_is_schema_failure(exc) or _is_request_too_large(exc)):
+        except Exception as exc:
+            if not (_is_api_status_error(exc) and (_is_schema_failure(exc) or _is_request_too_large(exc))):
                 raise
             failure = exc
             if _failure_kind(exc) == "invalid":
