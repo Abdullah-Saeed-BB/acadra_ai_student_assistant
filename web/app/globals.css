@@ -34,6 +34,10 @@
   --radius-lg: 14px;
 
   --sidebar-width: 268px;
+  --sidebar-collapsed-width: 74px;
+
+  /* Reading width for the page content, centered in the workspace. */
+  --content-max-width: 1180px;
 }
 
 * {
@@ -91,7 +95,10 @@ a {
 }
 
 .app-content {
+  width: 100%;
+  max-width: var(--content-max-width);
   min-width: 0;
+  margin-inline: auto;
   padding: 40px clamp(20px, 4vw, 56px) 80px;
 }
 
@@ -151,6 +158,27 @@ a {
   font-size: var(--text-label);
   font-weight: 600;
   cursor: pointer;
+}
+
+.sidebar-collapse {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sidebar-collapse:hover {
+  background: rgba(12, 119, 109, 0.08);
+  border-color: var(--line);
+  color: var(--action-teal);
 }
 
 .sidebar-nav {
@@ -213,6 +241,68 @@ a {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* Collapsible sidebar (desktop). Mobile keeps the Menu toggle above instead. */
+@media (min-width: 901px) {
+  .app-frame:has(.sidebar.is-collapsed) {
+    grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+  }
+
+  .sidebar-collapse {
+    display: inline-flex;
+  }
+
+  .sidebar.is-collapsed {
+    align-items: center;
+    gap: 22px;
+    padding: 24px 12px 28px;
+  }
+
+  .sidebar.is-collapsed .sidebar-top {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sidebar.is-collapsed .brand-wordmark {
+    display: none;
+  }
+
+  .sidebar.is-collapsed .nav-group-title {
+    /* Keeps the heading in the accessibility tree while the rail is icon-only. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar.is-collapsed .nav-group {
+    align-items: center;
+  }
+
+  .sidebar.is-collapsed .nav-item {
+    justify-content: center;
+    padding: 6px;
+  }
+
+  .sidebar.is-collapsed .nav-item-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar.is-collapsed .nav-hint {
+    display: none;
+  }
 }
 
 /* ----------------------------------------------------------------- page -- */

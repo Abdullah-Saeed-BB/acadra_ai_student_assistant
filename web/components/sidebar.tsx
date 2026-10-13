@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AcadraLogo } from "@/components/acadra-mark";
@@ -119,6 +119,27 @@ function SimulatorIcon(props: NavIconProps) {
   );
 }
 
+function CollapseIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      className="nav-icon"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M9 4v16" />
+      <path d={collapsed ? "m13.5 9.5 2.5 2.5-2.5 2.5" : "m16 9.5-2.5 2.5 2.5 2.5"} />
+    </svg>
+  );
+}
+
 type NavItem = {
   href: string;
   label: string;
@@ -163,16 +184,57 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+const COLLAPSE_STORAGE_KEY = "acadra:sidebar-collapsed";
+
+/**
+ * Tiny external store for the collapsed preference: localStorage is the source
+ * of truth so the rail keeps its state across reloads and browser tabs, while
+ * `useSyncExternalStore` keeps the server render stable (always expanded).
+ */
+const collapseStore = {
+  listeners: new Set<() => void>(),
+  read(): boolean {
+    return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "true";
+  },
+  write(next: boolean) {
+    window.localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next));
+    collapseStore.listeners.forEach((listener) => listener());
+  },
+  subscribe(listener: () => void) {
+    collapseStore.listeners.add(listener);
+    window.addEventListener("storage", listener);
+    return () => {
+      collapseStore.listeners.delete(listener);
+      window.removeEventListener("storage", listener);
+    };
+  },
+};
+
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const collapsed = useSyncExternalStore(
+    collapseStore.subscribe,
+    collapseStore.read,
+    () => false,
+  );
 
   return (
-    <aside className="sidebar">
+    <aside className={collapsed ? "sidebar is-collapsed" : "sidebar"}>
       <div className="sidebar-top">
         <Link href="/" className="brand" aria-label="Acadra home">
           <AcadraLogo />
         </Link>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-controls="primary-navigation"
+          onClick={() => collapseStore.write(!collapsed)}
+        >
+          <CollapseIcon collapsed={collapsed} />
+        </button>
         <button
           type="button"
           className="nav-toggle"
@@ -201,10 +263,11 @@ export function Sidebar() {
                   href={item.href}
                   className={active ? "nav-item active" : "nav-item"}
                   aria-current={active ? "page" : undefined}
+                  title={item.label}
                   onClick={() => setOpen(false)}
                 >
                   <Icon />
-                  {item.label}
+                  <span className="nav-item-label">{item.label}</span>
                 </Link>
               );
             })}
