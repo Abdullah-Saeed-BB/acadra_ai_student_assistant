@@ -196,17 +196,14 @@ a {
   background: rgba(12, 119, 109, 0.08);
 }
 
-.nav-waypoint {
+.nav-icon {
   flex: none;
-  width: 9px;
-  height: 9px;
-  border: 2px solid var(--line);
-  border-radius: 50%;
+  color: var(--muted);
 }
 
-.nav-item.active .nav-waypoint {
-  background: var(--action-teal);
-  border-color: var(--action-teal);
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon {
+  color: var(--action-teal);
 }
 
 .nav-hint {

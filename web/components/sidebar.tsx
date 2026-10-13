@@ -1,13 +1,128 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AcadraLogo } from "@/components/acadra-mark";
 
+type NavIconProps = {
+  className?: string;
+};
+
+function NavIcon({ children, className }: NavIconProps & { children: ReactNode }) {
+  return (
+    <svg
+      className={className ? `nav-icon ${className}` : "nav-icon"}
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function TodayIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </NavIcon>
+  );
+}
+
+function UpcomingIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+      <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
+    </NavIcon>
+  );
+}
+
+function BacklogIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z" />
+      <path d="M3 12.5 12 17l9-4.5M3 16.5 12 21l9-4.5" />
+    </NavIcon>
+  );
+}
+
+function TasksIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="m7.5 12 2.5 2.5L16 8.5" />
+    </NavIcon>
+  );
+}
+
+function InboxIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <path d="M3 13h4l1.5 2.5h7L17 13h4" />
+      <path d="M5.5 5h13l2.5 8v4.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V13l2.5-8Z" />
+    </NavIcon>
+  );
+}
+
+function CoursesIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <path d="M4 4.5h5.5A2.5 2.5 0 0 1 12 7v13a2.2 2.2 0 0 0-2.2-2.2H4V4.5Z" />
+      <path d="M20 4.5h-5.5A2.5 2.5 0 0 0 12 7v13a2.2 2.2 0 0 1 2.2-2.2H20V4.5Z" />
+    </NavIcon>
+  );
+}
+
+function AddSourceIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </NavIcon>
+  );
+}
+
+function GmailIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <path d="m4 7 8 6 8-6" />
+    </NavIcon>
+  );
+}
+
+function SettingsIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+      <circle cx="16" cy="7" r="2.5" />
+      <circle cx="8" cy="17" r="2.5" />
+    </NavIcon>
+  );
+}
+
+function SimulatorIcon(props: NavIconProps) {
+  return (
+    <NavIcon {...props}>
+      <path d="M12 3.5 13.8 9l5.7 1.8L13.8 12.6 12 18.5l-1.8-5.9L4.5 10.8 10.2 9 12 3.5Z" />
+      <path d="M19 16.5l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z" />
+    </NavIcon>
+  );
+}
+
 type NavItem = {
   href: string;
   label: string;
+  icon: (props: NavIconProps) => ReactNode;
 };
 
 type NavGroup = {
@@ -19,26 +134,26 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Plan",
     items: [
-      { href: "/", label: "Today" },
-      { href: "/upcoming", label: "Upcoming" },
-      { href: "/backlog", label: "Backlog" },
-      { href: "/tasks", label: "All tasks" },
+      { href: "/", label: "Today", icon: TodayIcon },
+      { href: "/upcoming", label: "Upcoming", icon: UpcomingIcon },
+      { href: "/backlog", label: "Backlog", icon: BacklogIcon },
+      { href: "/tasks", label: "All tasks", icon: TasksIcon },
     ],
   },
   {
     title: "What changed",
     items: [
-      { href: "/inbox", label: "Inbox" },
-      { href: "/courses", label: "Courses" },
-      { href: "/sources/new", label: "Add source" },
-      { href: "/gmail", label: "Gmail" },
+      { href: "/inbox", label: "Inbox", icon: InboxIcon },
+      { href: "/courses", label: "Courses", icon: CoursesIcon },
+      { href: "/sources/new", label: "Add source", icon: AddSourceIcon },
+      { href: "/gmail", label: "Gmail", icon: GmailIcon },
     ],
   },
   {
     title: "Workspace",
     items: [
-      { href: "/settings", label: "Settings" },
-      { href: "/alexa+_simulator", label: "Alexa+ simulator" },
+      { href: "/settings", label: "Settings", icon: SettingsIcon },
+      { href: "/alexa+_simulator", label: "Alexa+ simulator", icon: SimulatorIcon },
     ],
   },
 ];
@@ -79,6 +194,7 @@ export function Sidebar() {
             <p className="nav-group-title">{group.title}</p>
             {group.items.map((item) => {
               const active = isActive(pathname, item.href);
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
@@ -87,7 +203,7 @@ export function Sidebar() {
                   aria-current={active ? "page" : undefined}
                   onClick={() => setOpen(false)}
                 >
-                  <span className="nav-waypoint" aria-hidden="true" />
+                  <Icon />
                   {item.label}
                 </Link>
               );
