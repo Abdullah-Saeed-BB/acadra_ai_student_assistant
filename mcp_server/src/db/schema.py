@@ -1,11 +1,11 @@
-"""SQLAlchemy models for source provenance and accepted academic facts."""
+"""SQLAlchemy models for source provenance, accepted academic facts, and plan tasks."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, UniqueConstraint, text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Index, Integer, Numeric, Text, Uuid, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -205,3 +205,52 @@ class SourceProcessingRun(Base):
     item_count: Mapped[int] = mapped_column(Integer)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Task(Base):
+    """A planned action, or a parent task whose steps are child tasks.
+
+    A task has at most one selected work day. A task without a selected day is
+    unfinished backlog work; the selected day is the plan, not a copy of it.
+    `status` is one of "todo", "in_progress", or "done". Steps are child rows
+    that point at a parent through `parent_task_id`; a parent's progress is
+    derived from its unfinished steps rather than stored twice.
+    """
+
+    __tablename__ = "tasks"
+    __table_args__ = (
+        Index("ix_tasks_selected_day_position", "selected_day", "list_position"),
+        Index("ix_tasks_parent_task", "parent_task_id"),
+        Index("ix_tasks_academic_item", "academic_item_id"),
+        Index("ix_tasks_course", "course_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    title: Mapped[str] = mapped_column(Text)
+    details: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="todo", server_default=text("'todo'"))
+    selected_day: Mapped[date | None] = mapped_column(Date)
+    list_position: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    estimated_minutes: Mapped[int | None] = mapped_column(Integer)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, server_default=text("'[]'"))
+    academic_item_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("academic_items.id"))
+    course_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("courses.id"))
+    parent_task_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("tasks.id", ondelete="CASCADE")
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PlanningPreferences(Base):
+    """The single student's defaults for daily planning suggestions."""
+
+    __tablename__ = "planning_preferences"
+    __table_args__ = (Index("uq_single_planning_preferences", "scope", unique=True),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(Text, default="default", server_default=text("'default'"))
+    preferred_daily_minutes: Mapped[int | None] = mapped_column(Integer)
+    focus_task_count: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
