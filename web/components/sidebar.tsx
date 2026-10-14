@@ -9,7 +9,10 @@ type NavIconProps = {
   className?: string;
 };
 
-function NavIcon({ children, className }: NavIconProps & { children: ReactNode }) {
+function NavIcon({
+  children,
+  className,
+}: NavIconProps & { children: ReactNode }) {
   return (
     <svg
       className={className ? `nav-icon ${className}` : "nav-icon"}
@@ -21,8 +24,7 @@ function NavIcon({ children, className }: NavIconProps & { children: ReactNode }
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden="true"
-    >
+      aria-hidden="true">
       {children}
     </svg>
   );
@@ -131,11 +133,12 @@ function CollapseIcon({ collapsed }: { collapsed: boolean }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden="true"
-    >
+      aria-hidden="true">
       <rect x="3" y="4" width="18" height="16" rx="2.5" />
       <path d="M9 4v16" />
-      <path d={collapsed ? "m13.5 9.5 2.5 2.5-2.5 2.5" : "m16 9.5-2.5 2.5 2.5 2.5"} />
+      <path
+        d={collapsed ? "m13.5 9.5 2.5 2.5-2.5 2.5" : "m16 9.5-2.5 2.5 2.5 2.5"}
+      />
     </svg>
   );
 }
@@ -174,7 +177,11 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Workspace",
     items: [
       { href: "/settings", label: "Settings", icon: SettingsIcon },
-      { href: "/alexa+_simulator", label: "Alexa+ simulator", icon: SimulatorIcon },
+      {
+        href: "/alexa+_simulator",
+        label: "Alexa+ simulator",
+        icon: SimulatorIcon,
+      },
     ],
   },
 ];
@@ -231,8 +238,7 @@ export function Sidebar() {
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
           aria-controls="primary-navigation"
-          onClick={() => collapseStore.write(!collapsed)}
-        >
+          onClick={() => collapseStore.write(!collapsed)}>
           <CollapseIcon collapsed={collapsed} />
         </button>
         <button
@@ -240,8 +246,7 @@ export function Sidebar() {
           className="nav-toggle"
           aria-expanded={open}
           aria-controls="primary-navigation"
-          onClick={() => setOpen((value) => !value)}
-        >
+          onClick={() => setOpen((value) => !value)}>
           {open ? "Close" : "Menu"}
         </button>
       </div>
@@ -249,8 +254,7 @@ export function Sidebar() {
       <nav
         id="primary-navigation"
         className={open ? "sidebar-nav open" : "sidebar-nav"}
-        aria-label="Primary"
-      >
+        aria-label="Primary">
         {NAV_GROUPS.map((group) => (
           <div className="nav-group" key={group.title}>
             <p className="nav-group-title">{group.title}</p>
@@ -264,8 +268,7 @@ export function Sidebar() {
                   className={active ? "nav-item active" : "nav-item"}
                   aria-current={active ? "page" : undefined}
                   title={item.label}
-                  onClick={() => setOpen(false)}
-                >
+                  onClick={() => setOpen(false)}>
                   <Icon />
                   <span className="nav-item-label">{item.label}</span>
                 </Link>
@@ -273,10 +276,6 @@ export function Sidebar() {
             })}
           </div>
         ))}
-        <p className="nav-hint">
-          Every step shows where it came from. Open Inbox to see what changed in your
-          sources.
-        </p>
       </nav>
     </aside>
   );
