@@ -1,14 +1,16 @@
 """MCP write tool for plain-text manual sources."""
 
+from __future__ import annotations
+
 from typing import Annotated
 from uuid import UUID
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from src.connectors.manual import prepare_manual_text
+from src.errors import handle_tool_errors, InvalidInputError
 from src.services.manual_text import save_manual_text
 from src.services.source_processing import process_source_revision
 
@@ -27,23 +29,22 @@ def register(mcp: FastMCP) -> None:
             idempotentHint=False,
             openWorldHint=False,
         ),
-        structured_output=True,
     )
+    @handle_tool_errors
     async def study_add_manual_text(
-        text: Annotated[str, Field(max_length=65536)],
-        title: Annotated[str | None, Field(max_length=200)] = None,
-        source_document_id: Annotated[str | None, Field(max_length=36)] = None,
-    ) -> dict[str, str | int | bool]:
+        text: Annotated[str, Field(max_length=65536, description="Plain text source material")],
+        title: Annotated[str | None, Field(default=None, max_length=200, description="Optional title")] = None,
+        source_document_id: Annotated[str | None, Field(default=None, max_length=36, description="UUID string if replacing existing source")] = None,
+    ) -> dict[str, str | int | bool | list[str]]:
         try:
             parsed_id = UUID(source_document_id) if source_document_id else None
         except ValueError:
-            raise ValueError("source_document_id must be a UUID.") from None
+            raise InvalidInputError("source_document_id must be a valid UUID.") from None
+
         envelope = prepare_manual_text(text, title=title, source_document_id=parsed_id)
-        try:
-            result = await save_manual_text(envelope)
-            processing = await process_source_revision(result.source_revision_id)
-        except SQLAlchemyError:
-            raise RuntimeError("Could not save manual text.") from None
+        result = await save_manual_text(envelope)
+        processing = await process_source_revision(result.source_revision_id)
+
         return {
             "source_document_id": str(result.source_document_id),
             "source_revision_id": str(result.source_revision_id),

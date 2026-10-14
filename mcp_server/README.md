@@ -1,8 +1,8 @@
 # Study planner MCP server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text, uploaded HTML/PDF files, and incoming Gmail subject/body text are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail polling and durable extraction retries are implemented; the full inbox and planning are still planned.
+This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text, uploaded HTML/PDF files, and incoming Gmail subject/body text are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail polling and durable extraction retries are implemented. The MCP surface also exposes read tools for sources, revisions, candidates, courses, changes, and evidence; task and plan tools for the Today/Upcoming/Backlog/Kanban views; planning preferences; and a student correction path. The matching REST routes are still planned.
 
-The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application.
+The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application. The full MCP contract is in [`MCP_PROPOSEL.md`](../../system/MCP_PROPOSEL.md).
 
 The Python package is `src`, with the entry point at `src/server.py`. Use the command below from `app/mcp_server`; running `src/server.py` directly bypasses its package imports.
 
@@ -104,6 +104,22 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8001/api/academic-items?item_type=assig
 This endpoint reads accepted items stored in `academic_items`, including those from manual text and file extraction. `GET /api/academic-items/{item_id}/evidence` shows the source excerpts, date wording, and review reasons behind an extracted item. `GET /api/sources/{source_document_id}/candidates` shows the latest revision's candidates that need review and were not published as items; the older `/api/sources/text/{source_document_id}/candidates` path also works. An ambiguous or date-only deadline stays `null` in `due_at` and is retained in the evidence response for review. The mistaken direct-item `POST /api/academic-items` route has been removed.
 
 Run the project-level checks from the repository root as shown in [`test/README.md`](../../test/README.md). Set `TEST_DATABASE_URL` to an initialized PostgreSQL database to also run revision and academic-persistence tests.
+
+## MCP tools and resources
+
+`src/server.py` registers every `study_` tool in `src/mcp/tools/` and the `study://` resource templates in `src/mcp/resources/academic_context.py`. Reads cover academic items and evidence, changes, sources and candidates, courses, tasks, and the Today/Upcoming/Backlog/Kanban plans. Writes cover manual text, task create/update/move/reorder/complete/split, academic-item review, planning preferences, and the Gmail sender allowlist. The full contract and its migration map from the original canvas names are in [`MCP_PROPOSEL.md`](../../system/MCP_PROPOSEL.md).
+
+Integration tests for the tools and resources live in `tests/test_mcp_server.py` and run against PostgreSQL. From `app/mcp_server`:
+
+```powershell
+uv run python -m unittest tests.test_mcp_server -v
+```
+
+Apply the planning migration once to a development database created before the task-list schema. It drops the empty canvas-era `tasks`, `planning_preferences`, `study_sessions`, and `availability_windows` tables and recreates `tasks` and `planning_preferences`; academic, source, and change data are preserved.
+
+```powershell
+.\.venv\Scripts\python.exe -m db.migrate_planning_schema
+```
 
 ## Run locally
 
