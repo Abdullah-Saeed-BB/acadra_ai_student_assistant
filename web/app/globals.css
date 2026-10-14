@@ -11,15 +11,15 @@
   color-scheme: light;
 
   /* Canonical palette from DESIGN.md */
-  --ink: #17343d;
-  --paper: #f7f3ea;
+  --ink: #142e36;
+  --paper: #f2f6f5;
   --white: #ffffff;
-  --muted: #536a70;
-  --line: #d8e2de;
-  --action-teal: #0c776d;
-  --mint: #68cbb5;
-  --signal-amber: #e8b45a;
-  --priority-coral: #a83f35;
+  --muted: #43585e;
+  --line: #b3c4c0;
+  --action-teal: #0a665e;
+  --mint: #4fa894;
+  --signal-amber: #9e6c11;
+  --priority-coral: #96352c;
 
   /* Type. Manrope works the app; Fraunces is a single human accent per view. */
   --font-body: var(--font-manrope), Arial, Helvetica, sans-serif;
@@ -358,7 +358,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 22px;
+  margin: 11px 0;
 }
 
 .page-actions a {
@@ -1009,6 +1009,10 @@ a {
     flex: 1;
     min-height: 0;
   }
+
+  .sidebar.is-collapsed .brand {
+    gap: 0px;
+  }
 }
 
 /* ------------------------------------------------------------ responsive -- */
@@ -1026,6 +1030,10 @@ a {
     padding: 16px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .sidebar.is-collapsed .brand {
+    gap: 10px;
   }
 
   .nav-toggle {

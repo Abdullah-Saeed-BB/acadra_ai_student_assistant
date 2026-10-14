@@ -2,15 +2,15 @@
 name: Acadra
 description: From scattered updates to a clear next step.
 colors:
-  ink: "#17343D"
-  paper: "#F7F3EA"
-  white: "#FFFFFF"
-  muted: "#536A70"
-  line: "#D8E2DE"
-  action-teal: "#0C776D"
-  mint: "#68CBB5"
-  signal-amber: "#E8B45A"
-  priority-coral: "#A83F35"
+  ink: "#142e36"
+  paper: "#f2f6f5"
+  white: "#ffffff"
+  muted: "#43585e"
+  line: "#b3c4c0"
+  action-teal: "#0a665e"
+  mint: "#4fa894"
+  signal-amber: "#9e6c11"
+  priority-coral: "#96352c"
 typography:
   display-accent:
     fontFamily: "Fraunces, Georgia, serif"
