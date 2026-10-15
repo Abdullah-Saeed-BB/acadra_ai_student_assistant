@@ -1,15 +1,71 @@
 import type { Metadata } from "next";
-import { PlannedView } from "@/components/planned-view";
+import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
+import { TaskList } from "@/components/task-list";
+import { backendUnavailableMessage, getBacklog } from "@/lib/tasks";
 
 export const metadata: Metadata = {
   title: "Backlog",
 };
 
-export default function BacklogPage() {
+export default async function BacklogPage() {
+  let backlog = null;
+  let error: string | null = null;
+  try {
+    backlog = await getBacklog(50);
+  } catch (cause) {
+    error =
+      cause instanceof Error ? cause.message : backendUnavailableMessage();
+  }
+
+  const tasks = backlog?.tasks ?? [];
+
   return (
-    <PlannedView
-      title="Backlog"
-      description="Unfinished tasks that have no selected day. Review the remaining effort, choose a day for a task, or split it into smaller steps."
-    />
+    <div className="page">
+      <PageHeader
+        title="Backlog"
+        description="Unfinished tasks that have no selected day."
+      />
+
+      {error ? (
+        <section className="panel">
+          <p className="message error" role="alert">
+            {error}
+          </p>
+          <div className="page-actions">
+            <Link className="connect-button" href="/">
+              Back to Today
+            </Link>
+          </div>
+        </section>
+      ) : tasks.length === 0 ? (
+        <section className="panel">
+          <p className="panel-note">
+            Backlog is empty. Unscheduled work lands here so you can pick a day
+            for it later.
+          </p>
+          <div className="page-actions">
+            <Link className="connect-button" href="/tasks/new">
+              New task
+            </Link>
+            <Link className="page-link" href="/sources/new">
+              Add a source
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <section className="panel" aria-labelledby="backlog-list">
+          <p className="panel-note" id="backlog-list">
+            {tasks.length} {tasks.length === 1 ? "task" : "tasks"} ·{" "}
+            <span className="tnum">
+              {backlog?.total_estimated_minutes ?? 0} min
+            </span>{" "}
+            remaining
+            {backlog?.has_more ? " · showing the first page" : ""}
+          </p>
+          <TaskList tasks={tasks} />
+        </section>
+      )}
+    </div>
   );
 }
