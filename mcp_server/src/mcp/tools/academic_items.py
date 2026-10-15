@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -13,6 +12,7 @@ from pydantic import Field
 from src.errors import handle_tool_errors, InvalidInputError, NotFoundError
 from src.mcp.responses import format_read_response, paginate_response
 from src.mcp.schemas import CorrectionFields
+from src.mcp.time_parsing import parse_datetime_bound
 from src.services.academic_items import (
     AcademicItemFilters,
     get_academic_item,
@@ -59,22 +59,24 @@ def register(mcp: FastMCP) -> None:
         item_type: Annotated[Literal["assignment", "announcement", "reading", "event"] | None, Field(default=None, description="Optional type filter")] = None,
         course_id: Annotated[str | None, Field(default=None, description="Optional course UUID filter")] = None,
         review_state: Annotated[Literal["verified", "uncertain", "conflicting"] | None, Field(default=None, description="Optional review status")] = None,
-        due_from: Annotated[datetime | None, Field(default=None, description="Inclusive lower bound (timezone-aware)")] = None,
-        due_before: Annotated[datetime | None, Field(default=None, description="Exclusive upper bound (timezone-aware)")] = None,
+        due_from: Annotated[str | None, Field(default=None, description="Inclusive lower bound: ISO 8601 date-time with UTC offset (e.g. 2026-10-15T09:00:00Z) or date-only YYYY-MM-DD (interpreted as UTC midnight)")] = None,
+        due_before: Annotated[str | None, Field(default=None, description="Exclusive upper bound; same formats as due_from")] = None,
         limit: Annotated[int, Field(default=20, ge=1, le=100, description="Page limit (1-100)")] = 20,
         offset: Annotated[int, Field(default=0, ge=0, description="Page offset")] = 0,
         response_format: Annotated[Literal["json", "markdown"], Field(default="json", description="Response representation")] = "json",
     ) -> dict[str, Any]:
         parsed_course_id = UUID(course_id) if course_id else None
-        if due_from and due_before and due_from >= due_before:
+        parsed_due_from = parse_datetime_bound(due_from, param_name="due_from") if due_from else None
+        parsed_due_before = parse_datetime_bound(due_before, param_name="due_before") if due_before else None
+        if parsed_due_from and parsed_due_before and parsed_due_from >= parsed_due_before:
             raise InvalidInputError("due_from must be earlier than due_before")
 
         filters = AcademicItemFilters(
             item_type=item_type,
             course_id=parsed_course_id,
             review_state=review_state,
-            due_from=due_from,
-            due_before=due_before,
+            due_from=parsed_due_from,
+            due_before=parsed_due_before,
             limit=limit,
             offset=offset,
         )

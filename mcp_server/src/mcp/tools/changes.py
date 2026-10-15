@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -12,6 +11,7 @@ from pydantic import Field
 
 from src.errors import handle_tool_errors, InvalidInputError
 from src.mcp.responses import format_read_response, paginate_response
+from src.mcp.time_parsing import parse_datetime_bound
 from src.services.changes import get_changes_since
 
 
@@ -28,7 +28,7 @@ def register(mcp: FastMCP) -> None:
     )
     @handle_tool_errors
     async def study_get_changes_since(
-        since: Annotated[datetime | None, Field(default=None, description="Changes recorded after this instant (timezone-aware)")] = None,
+        since: Annotated[str | None, Field(default=None, description="Changes recorded after this instant: ISO 8601 date-time with UTC offset (e.g. 2026-10-15T09:00:00Z) or date-only YYYY-MM-DD (interpreted as UTC midnight)")] = None,
         item_type: Annotated[Literal["assignment", "announcement", "reading", "event"] | None, Field(default=None, description="Optional academic item type filter")] = None,
         course_id: Annotated[str | None, Field(default=None, description="Optional course UUID filter")] = None,
         change_kind: Annotated[Literal["created", "edited"] | None, Field(default=None, description="Optional change kind")] = None,
@@ -44,7 +44,7 @@ def register(mcp: FastMCP) -> None:
                 raise InvalidInputError("course_id must be a valid UUID.") from None
 
         page = await get_changes_since(
-            since=since,
+            since=parse_datetime_bound(since, param_name="since") if since else None,
             item_type=item_type,
             course_id=parsed_course_id,
             change_kind=change_kind,

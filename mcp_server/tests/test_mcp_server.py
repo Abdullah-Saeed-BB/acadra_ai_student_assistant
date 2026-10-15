@@ -327,6 +327,44 @@ class TestStudyPlannerMCPServer(unittest.IsolatedAsyncioTestCase):
                 await session.execute(delete(AcademicItem).where(AcademicItem.id == item_id))
                 await session.execute(delete(Course).where(Course.id == course_id))
 
+    async def test_academic_item_date_bounds(self):
+        # Regression: "What's due this week" answers arrive as date-only bounds.
+        # The tool must accept them instead of failing schema validation.
+        today = date.today()
+        res = await self.server.call_tool(
+            "study_list_academic_items",
+            {"due_from": today.isoformat(), "due_before": (today + timedelta(days=7)).isoformat()},
+        )
+        is_err, page = parse_result(res)
+        self.assertFalse(is_err)
+        self.assertIn("items", page)
+
+        # Full date-times with an offset and naive date-times still work.
+        for due_from, due_before in (
+            ("2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z"),
+            ("2026-01-01T00:00:00", "2027-01-01T00:00:00"),
+        ):
+            res = await self.server.call_tool(
+                "study_list_academic_items",
+                {"due_from": due_from, "due_before": due_before},
+            )
+            is_err, _ = parse_result(res)
+            self.assertFalse(is_err)
+
+        # Unparseable bounds return a structured invalid_input error, not a crash.
+        res = await self.server.call_tool("study_list_academic_items", {"due_from": "next week"})
+        is_err, err = parse_result(res)
+        self.assertTrue(is_err)
+        self.assertEqual(err["error"]["code"], "invalid_input")
+
+        # The change feed accepts a date-only "since" too.
+        res = await self.server.call_tool(
+            "study_get_changes_since",
+            {"since": (today - timedelta(days=1)).isoformat()},
+        )
+        is_err, _ = parse_result(res)
+        self.assertFalse(is_err)
+
     async def test_error_handling(self):
         # 1. Invalid UUID
         res_bad_id = await self.server.call_tool("study_get_task", {"task_id": "not-a-uuid"})

@@ -8,9 +8,10 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.connectors.gmail import normalize_allowed_senders
+from src.mcp.time_parsing import LenientAwareDatetime
 
 
 # --- Enums (Section 5.2) ---
@@ -65,8 +66,8 @@ class ListAcademicItemsInput(BaseModel):
     item_type: ItemType | None = None
     course_id: UUID | None = None
     review_state: ReviewState | None = None
-    due_from: AwareDatetime | None = Field(default=None, description="Inclusive lower bound (timezone-aware)")
-    due_before: AwareDatetime | None = Field(default=None, description="Exclusive upper bound (timezone-aware)")
+    due_from: LenientAwareDatetime | None = Field(default=None, description="Inclusive lower bound (ISO 8601 date-time with UTC offset, or date-only YYYY-MM-DD as UTC midnight)")
+    due_before: LenientAwareDatetime | None = Field(default=None, description="Exclusive upper bound (ISO 8601 date-time with UTC offset, or date-only YYYY-MM-DD as UTC midnight)")
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
     response_format: ResponseFormat = Field(default=ResponseFormat.JSON)
@@ -100,8 +101,9 @@ class ReviewAcademicItemInput(BaseModel):
 class CorrectionFields(BaseModel):
     """Allowlisted academic fields a student correction may change.
 
-    Parsing coerces ISO-8601 strings into aware datetimes and UUID strings into
-    UUIDs before the service writes them, so a valid JSON payload is accepted.
+    Parsing coerces ISO-8601 strings into aware datetimes (date-only values
+    become UTC midnight) and UUID strings into UUIDs before the service writes
+    them, so a valid JSON payload is accepted.
     Use ``model_dump(exclude_unset=True)`` to apply only the fields provided.
     """
 
@@ -109,8 +111,8 @@ class CorrectionFields(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=500)
     details: str | None = Field(default=None, max_length=5000)
-    starts_at: AwareDatetime | None = None
-    due_at: AwareDatetime | None = None
+    starts_at: LenientAwareDatetime | None = None
+    due_at: LenientAwareDatetime | None = None
     grade_weight_percent: float | None = Field(default=None, ge=0, le=100)
     late_penalty: str | None = Field(default=None, max_length=500)
     course_id: UUID | None = None
@@ -121,7 +123,7 @@ class CorrectionFields(BaseModel):
 class GetChangesSinceInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    since: AwareDatetime | None = Field(default=None, description="Changes after this instant (timezone-aware)")
+    since: LenientAwareDatetime | None = Field(default=None, description="Changes after this instant (ISO 8601 date-time with UTC offset, or date-only YYYY-MM-DD as UTC midnight)")
     item_type: ItemType | None = None
     course_id: UUID | None = None
     change_kind: ChangeKind | None = None
