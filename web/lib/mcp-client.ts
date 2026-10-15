@@ -71,11 +71,62 @@ export type StudyToolOutcome =
  * `{ ok: false }` outcomes and are rendered as an actionable reply.
  */
 export class McpUnavailableError extends Error {
-  constructor(message = "The study planner MCP server is unavailable.") {
+  /** Partial agent trace collected before the failure, so the bridge can still return it. */
+  agentTrace?: AgentTrace | null;
+  constructor(message = "The study planner MCP server is unavailable.", trace?: AgentTrace | null) {
     super(message);
     this.name = "McpUnavailableError";
+    this.agentTrace = trace ?? null;
   }
 }
+
+/**
+ * TEMP-DEBUG trace model for the AI agent process.
+ * Collected server-side in `replyWithTrace` and rendered by
+ * `components/temp-agent-trace.tsx`. Keep JSON-serializable (no Error objects).
+ */
+export type AgentToolCallTrace = {
+  id: string;
+  name: string;
+  argumentsRaw: string;
+  argumentsParsed: Record<string, unknown>;
+};
+
+export type AgentToolOutputTrace = {
+  tool: string;
+  ok: boolean;
+  /** Text fed back to the LLM (rendered outcome or failure string). */
+  renderedText: string;
+  /** Raw normalized outcome data when available. */
+  data?: Record<string, unknown>;
+  error?: StudyToolError;
+};
+
+export type AgentStepTrace = {
+  round: number;
+  /** Raw LLM message content for this round: pre-tool thought / draft answer. */
+  llmThought: string | null;
+  toolCalls: AgentToolCallTrace[];
+  toolOutputs: AgentToolOutputTrace[];
+  /** LLM request failure for this round, if any. */
+  llmError?: string;
+};
+
+export type AgentErrorTrace = {
+  /** Where the failure surfaced: bridge validation, MCP transport, or the chat model. */
+  source: "bridge" | "mcp" | "llm";
+  message: string;
+  detail?: string;
+};
+
+export type AgentTrace = {
+  model: string;
+  mcpServerUrl: string;
+  toolsDiscovered: string[];
+  steps: AgentStepTrace[];
+  finalReply: string | null;
+  error?: AgentErrorTrace;
+};
 
 type McpToolResult = Awaited<ReturnType<Client["callTool"]>>;
 
@@ -257,20 +308,74 @@ function describeError(error: unknown): string {
  * "bridge down" and the simulator can answer with its fallback message.
  */
 export async function replyToConversation(messages: StudyChatMessage[]): Promise<string> {
+  const { reply } = await replyWithTrace(messages);
+  return reply;
+}
+
+/**
+ * TEMP-DEBUG: same LLM tool-calling loop as before, but also records every
+ * round (LLM thought, tool calls, tool outputs) into an `AgentTrace`.
+ * On success resolves `{ reply, trace }`. On bridge/MCP/LLM failure it throws
+ * `McpUnavailableError` with the partial trace attached as `error.agentTrace`
+ * so `app/api/alexa-chat/route.ts` can still return it to the temp viewer.
+ */
+export async function replyWithTrace(
+  messages: StudyChatMessage[],
+): Promise<{ reply: string; trace: AgentTrace }> {
   const llm = getLlmConfig();
+  const mcpServerUrl = MCP_SERVER_URL;
   if (!llm) {
+    const trace: AgentTrace = {
+      model: "(unconfigured)",
+      mcpServerUrl,
+      toolsDiscovered: [],
+      steps: [],
+      finalReply: null,
+      error: {
+        source: "llm",
+        message: "The chat model is not configured.",
+        detail: "Set MODEL_PROVIDER/MODEL_NAME plus its API key (GROQ_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY).",
+      },
+    };
     throw new McpUnavailableError(
       "The chat model is not configured. Set MODEL_PROVIDER/MODEL_NAME plus its API key.",
+      trace,
     );
   }
 
   return withStudyClient(async (client) => {
-    const { tools } = await client.listTools();
-    const studyTools = tools.filter((tool) => tool.name.startsWith("study_"));
-    if (studyTools.length === 0) {
-      throw new McpUnavailableError("The study planner exposed no study_* tools.");
+    const trace: AgentTrace = {
+      model: llm.model,
+      mcpServerUrl,
+      toolsDiscovered: [],
+      steps: [],
+      finalReply: null,
+    };
+    const fail = (message: string, error: AgentErrorTrace): never => {
+      trace.error = error;
+      throw new McpUnavailableError(message, trace);
+    };
+
+    let studyTools: Awaited<ReturnType<Client["listTools"]>>["tools"];
+    try {
+      ({ tools: studyTools } = await client.listTools());
+    } catch (error) {
+      return fail(`The study planner MCP request failed: ${describeError(error)}`, {
+        source: "mcp",
+        message: "tools/list failed.",
+        detail: describeError(error),
+      });
     }
-    const chatTools = studyTools.map((tool) => ({
+    const filtered = studyTools.filter((tool) => tool.name.startsWith("study_"));
+    trace.toolsDiscovered = filtered.map((tool) => tool.name);
+    if (filtered.length === 0) {
+      return fail("The study planner exposed no study_* tools.", {
+        source: "mcp",
+        message: "The study planner exposed no study_* tools.",
+        detail: `tools/list returned ${studyTools.length} tool(s), none prefixed study_.`,
+      });
+    }
+    const chatTools = filtered.map((tool) => ({
       type: "function" as const,
       function: {
         name: tool.name,
@@ -293,12 +398,35 @@ export async function replyToConversation(messages: StudyChatMessage[]): Promise
     ];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const answer = await completeChat(llm, chatMessages, chatTools);
+      const step: AgentStepTrace = { round: round + 1, llmThought: null, toolCalls: [], toolOutputs: [] };
+      trace.steps.push(step);
+
+      let answer: { content: string | null; tool_calls?: ChatToolCall[] };
+      try {
+        answer = await completeChat(llm, chatMessages, chatTools);
+      } catch (error) {
+        const detail = describeError(error);
+        step.llmError = detail;
+        return fail(`The chat model request failed: ${detail}`, {
+          source: "llm",
+          message: `Round ${step.round}: chat-completions request failed.`,
+          detail,
+        });
+      }
+      step.llmThought = answer.content ?? null;
+
       const toolCalls = answer.tool_calls ?? [];
       if (toolCalls.length === 0) {
         const content = answer.content?.trim();
-        if (content) return content;
-        throw new McpUnavailableError("The chat model returned an empty reply.");
+        if (content) {
+          trace.finalReply = content;
+          return { reply: content, trace };
+        }
+        return fail("The chat model returned an empty reply.", {
+          source: "llm",
+          message: `Round ${step.round}: model returned no content and no tool calls.`,
+          detail: "Empty choices[0].message with no tool_calls.",
+        });
       }
 
       chatMessages.push({
@@ -309,18 +437,41 @@ export async function replyToConversation(messages: StudyChatMessage[]): Promise
 
       for (const call of toolCalls) {
         const args = parseToolArguments(call.function.arguments);
+        step.toolCalls.push({
+          id: call.id,
+          name: call.function.name,
+          argumentsRaw: call.function.arguments,
+          argumentsParsed: args,
+        });
         let resultText: string;
         try {
           const result = await client.callTool({ name: call.function.name, arguments: args });
-          resultText = renderOutcome(normalizeToolResult(call.function.name, result));
+          const outcome = normalizeToolResult(call.function.name, result);
+          resultText = renderOutcome(outcome);
+          step.toolOutputs.push(
+            outcome.ok
+              ? { tool: outcome.tool, ok: true, renderedText: resultText, data: outcome.data }
+              : { tool: outcome.tool, ok: false, renderedText: resultText, error: outcome.error },
+          );
         } catch (error) {
-          resultText = `That lookup failed: ${describeError(error)}`;
+          const detail = describeError(error);
+          resultText = `That lookup failed: ${detail}`;
+          step.toolOutputs.push({
+            tool: call.function.name,
+            ok: false,
+            renderedText: resultText,
+            error: { code: "error", message: resultText },
+          });
         }
         chatMessages.push({ role: "tool", tool_call_id: call.id, content: resultText });
       }
     }
 
-    throw new McpUnavailableError("The chat model did not finish within its tool budget.");
+    return fail("The chat model did not finish within its tool budget.", {
+      source: "llm",
+      message: `Model kept calling tools for ${MAX_TOOL_ROUNDS} rounds without a final answer.`,
+      detail: "Increase MAX_TOOL_ROUNDS or inspect the last step's tool outputs.",
+    });
   });
 }
 

@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 
-import { McpUnavailableError, replyToConversation } from "@/lib/mcp-client";
+import { McpUnavailableError, replyWithTrace } from "@/lib/mcp-client";
 
 export const runtime = "nodejs";
 
@@ -56,19 +56,20 @@ export async function POST(request: Request) {
   }
 
   try {
-    const reply = await replyToConversation(parsed.data.messages);
-    return Response.json({ reply }, { headers: { "Cache-Control": "no-store" } });
+    const { reply, trace } = await replyWithTrace(parsed.data.messages);
+    return Response.json({ reply, trace }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof McpUnavailableError) {
       // Non-200 so the simulator can answer with its fallback message.
+      // TEMP-DEBUG: still include the partial agent trace when we have one.
       return Response.json(
-        { error: "The Alexa+ MCP bridge is unavailable." },
+        { error: "The Alexa+ MCP bridge is unavailable.", trace: error.agentTrace ?? null },
         { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
     console.error("alexa-chat bridge error:", error);
     return Response.json(
-      { error: "The Alexa+ bridge could not complete the request." },
+      { error: "The Alexa+ bridge could not complete the request.", trace: null },
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }

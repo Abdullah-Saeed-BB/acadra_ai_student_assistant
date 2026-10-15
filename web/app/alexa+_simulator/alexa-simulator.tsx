@@ -1,7 +1,16 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { requestAlexaReply, type ChatMessage } from "./alexa-transport";
+import { requestAlexaWithTrace, type ChatMessage, type FrontendErrorTrace } from "./alexa-transport";
+import type { AgentTrace } from "@/lib/mcp-client";
+import { TempAgentTrace } from "@/components/temp-agent-trace";
+
+/** TEMP-DEBUG: assistant messages also carry the agent trace + error logs. */
+type DisplayMessage = ChatMessage & {
+  trace?: AgentTrace | null;
+  frontendError?: FrontendErrorTrace | null;
+  durationMs?: number | null;
+};
 
 const WELCOME = "How can I help with your plan?";
 const MAX_INPUT_HEIGHT = 160;
@@ -14,7 +23,7 @@ function nextMessageId(prefix: "user" | "assistant"): string {
 }
 
 export function AlexaSimulator() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +55,7 @@ export function AlexaSimulator() {
     if (!text || busyRef.current) return;
     busyRef.current = true;
 
-    const history: ChatMessage[] = [
+    const history: DisplayMessage[] = [
       ...messages,
       { id: nextMessageId("user"), role: "user", text },
     ];
@@ -57,11 +66,23 @@ export function AlexaSimulator() {
     if (inputRef.current) inputRef.current.style.height = "auto";
 
     try {
-      const reply = await requestAlexaReply(history);
+      const startedAt = Date.now();
+      const result = await requestAlexaWithTrace(history);
+      const durationMs = Date.now() - startedAt;
       setMessages((current) => [
         ...current,
-        { id: nextMessageId("assistant"), role: "assistant", text: reply },
+        {
+          id: nextMessageId("assistant"),
+          role: "assistant",
+          text: result.reply,
+          trace: result.trace,
+          frontendError: result.frontendError,
+          durationMs,
+        },
       ]);
+      // TEMP-DEBUG: surface the structured error (not just the fallback line).
+      const problem = result.frontendError?.message ?? result.trace?.error?.message;
+      if (problem) setError(`Alexa+ answered with fallback. ${problem}`);
     } catch {
       setError("Alexa+ could not answer. Try again.");
     } finally {
@@ -101,6 +122,14 @@ export function AlexaSimulator() {
           {messages.map((message) => (
             <article key={message.id} className={`chat-message ${message.role}`}>
               <p className="chat-bubble">{message.text}</p>
+              {/* TEMP-DEBUG: collapsible agent process under each assistant reply. */}
+              {message.role === "assistant" && (
+                <TempAgentTrace
+                  trace={message.trace ?? null}
+                  frontendError={message.frontendError ?? null}
+                  durationMs={message.durationMs ?? null}
+                />
+              )}
             </article>
           ))}
 
