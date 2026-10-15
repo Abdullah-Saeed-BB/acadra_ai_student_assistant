@@ -120,6 +120,20 @@ export type AgentStepTrace = {
   toolOutputs: AgentToolOutputTrace[];
   /** LLM request failure for this round, if any. */
   llmError?: string;
+  /** Tokens sent to the model (input) and produced by it (output) this round. */
+  tokens: AgentTokenUsage;
+};
+
+export type AgentTokenUsage = {
+  /** Tokens in the request (messages + tool schemas). Exact from API or estimated. */
+  inputTokens: number;
+  /** Tokens in the response (content + tool calls). Exact from API or estimated. */
+  outputTokens: number;
+  totalTokens: number;
+  /** "api" = provider's usage block; "estimated" = ~chars/4 fallback. */
+  source: "api" | "estimated";
+  /** Raw provider numbers when the API returned them. */
+  raw?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
 };
 
 export type AgentErrorTrace = {
@@ -136,6 +150,8 @@ export type AgentTrace = {
   steps: AgentStepTrace[];
   finalReply: string | null;
   error?: AgentErrorTrace;
+  /** Summed input/output across all recorded rounds. */
+  totalTokens: AgentTokenUsage;
 };
 
 type McpToolResult = Awaited<ReturnType<Client["callTool"]>>;
@@ -368,6 +384,7 @@ export async function replyWithTrace(
         detail:
           "Set MODEL_PROVIDER/MODEL_NAME plus its API key (GROQ_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY).",
       },
+      totalTokens: zeroTokens(),
     };
     throw new McpUnavailableError(
       "The chat model is not configured. Set MODEL_PROVIDER/MODEL_NAME plus its API key.",
@@ -382,6 +399,7 @@ export async function replyWithTrace(
       toolsDiscovered: [],
       steps: [],
       finalReply: null,
+      totalTokens: zeroTokens(),
     };
     const fail = (message: string, error: AgentErrorTrace): never => {
       trace.error = error;
@@ -440,15 +458,36 @@ export async function replyWithTrace(
         llmThought: null,
         toolCalls: [],
         toolOutputs: [],
+        tokens: zeroTokens(),
       };
       trace.steps.push(step);
 
-      let answer: { content: string | null; tool_calls?: ChatToolCall[] };
+      // Estimate input BEFORE the call so a failed request still shows what was sent.
+      const estimatedInput = estimateTokens(
+        JSON.stringify(chatMessages) + JSON.stringify(chatTools),
+      );
+      let answer: {
+        content: string | null;
+        tool_calls?: ChatToolCall[];
+        usage?: {
+          prompt_tokens: number;
+          completion_tokens: number;
+          total_tokens: number;
+        } | null;
+      };
       try {
         answer = await completeChat(llm, chatMessages, chatTools);
       } catch (error) {
         const detail = describeError(error);
         step.llmError = detail;
+        step.tokens = {
+          inputTokens: estimatedInput,
+          outputTokens: 0,
+          totalTokens: estimatedInput,
+          source: "estimated",
+          raw: null,
+        };
+        addTokens(trace.totalTokens, step.tokens);
         return fail(`The chat model request failed: ${detail}`, {
           source: "llm",
           message: `Round ${step.round}: chat-completions request failed.`,
@@ -456,6 +495,8 @@ export async function replyWithTrace(
         });
       }
       step.llmThought = answer.content ?? null;
+      step.tokens = toStepTokens(answer.usage ?? null, estimatedInput, answer);
+      addTokens(trace.totalTokens, step.tokens);
 
       const toolCalls = answer.tool_calls ?? [];
       if (toolCalls.length === 0) {
@@ -600,7 +641,15 @@ async function completeChat(
       parameters: Record<string, unknown>;
     };
   }>,
-): Promise<{ content: string | null; tool_calls?: ChatToolCall[] }> {
+): Promise<{
+  content: string | null;
+  tool_calls?: ChatToolCall[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  } | null;
+}> {
   let response: Response;
   try {
     response = await fetch(`${llm.baseUrl}/chat/completions`, {
@@ -632,12 +681,117 @@ async function completeChat(
     choices?: Array<{
       message?: { content?: string | null; tool_calls?: ChatToolCall[] };
     }>;
+    usage?: {
+      prompt_tokens?: unknown;
+      completion_tokens?: unknown;
+      total_tokens?: unknown;
+    } | null;
   };
   const message = data.choices?.[0]?.message;
   if (!message) {
     throw new McpUnavailableError("The chat model returned no message.");
   }
-  return { content: message.content ?? null, tool_calls: message.tool_calls };
+  return {
+    content: message.content ?? null,
+    tool_calls: message.tool_calls,
+    usage: normalizeUsage(data.usage),
+  };
+}
+
+/** Pulls exact token counts out of the provider's `usage` block, if present. */
+function normalizeUsage(
+  usage:
+    | {
+        prompt_tokens?: unknown;
+        completion_tokens?: unknown;
+        total_tokens?: unknown;
+      }
+    | null
+    | undefined,
+): {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+} | null {
+  if (!usage) return null;
+  const prompt =
+    typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : NaN;
+  const completion =
+    typeof usage.completion_tokens === "number"
+      ? usage.completion_tokens
+      : NaN;
+  const total =
+    typeof usage.total_tokens === "number" ? usage.total_tokens : NaN;
+  if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return null;
+  return {
+    prompt_tokens: prompt,
+    completion_tokens: completion,
+    total_tokens: Number.isFinite(total) ? total : prompt + completion,
+  };
+}
+
+function zeroTokens(): AgentTokenUsage {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    source: "api",
+    raw: null,
+  };
+}
+
+/**
+ * Rough token estimate (~4 chars per token) used only when the provider
+ * omits its `usage` block. Keeps the viewer honest: exact when possible,
+ * approximate otherwise.
+ */
+function estimateTokens(text: string): number {
+  const len = text.trim().length;
+  if (len === 0) return 0;
+  return Math.max(1, Math.ceil(len / 4));
+}
+
+function toStepTokens(
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  } | null,
+  estimatedInput: number,
+  answer: { content: string | null; tool_calls?: ChatToolCall[] },
+): AgentTokenUsage {
+  if (usage) {
+    return {
+      inputTokens: usage.prompt_tokens,
+      outputTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+      source: "api",
+      raw: usage,
+    };
+  }
+  const estimatedOutput = estimateTokens(
+    (answer.content ?? "") + JSON.stringify(answer.tool_calls ?? []),
+  );
+  return {
+    inputTokens: estimatedInput,
+    outputTokens: estimatedOutput,
+    totalTokens: estimatedInput + estimatedOutput,
+    source: "estimated",
+    raw: null,
+  };
+}
+
+function addTokens(total: AgentTokenUsage, step: AgentTokenUsage): void {
+  const pristine =
+    total.inputTokens === 0 &&
+    total.outputTokens === 0 &&
+    total.totalTokens === 0;
+  if (pristine) total.source = step.source;
+  else if (step.source !== "api" || total.source !== "api")
+    total.source = "estimated";
+  total.inputTokens += step.inputTokens;
+  total.outputTokens += step.outputTokens;
+  total.totalTokens += step.totalTokens;
 }
 
 function parseToolArguments(raw: string): Record<string, unknown> {

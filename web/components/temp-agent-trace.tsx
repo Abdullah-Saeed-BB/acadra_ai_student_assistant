@@ -11,7 +11,10 @@
  * ---------------------------------------------------------------------------
  * 1. app/web/lib/mcp-client.ts
  *    - Added trace types: AgentToolCallTrace, AgentToolOutputTrace,
- *      AgentStepTrace, AgentErrorTrace, AgentTrace.
+ *      AgentStepTrace, AgentErrorTrace, AgentTrace, AgentTokenUsage.
+ *    - `completeChat()` now returns the provider `usage` block when present.
+ *    - Each step records `tokens` {input/output/total, source: api|estimated};
+ *      missing usage falls back to ~chars/4 estimate. `trace.totalTokens` rolls up.
  *    - `McpUnavailableError` gained an optional `agentTrace` field.
  *    - Added `replyWithTrace()` which records every LLM round (thought,
  *      tool calls, tool outputs, llmError) plus model/MCP URL/tools list.
@@ -63,6 +66,19 @@ export type TempAgentTraceProps = {
 function countToolCalls(trace: AgentTrace | null): number {
   if (!trace) return 0;
   return trace.steps.reduce((n, s) => n + s.toolCalls.length, 0);
+}
+
+function formatNum(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/** "~" prefix = estimated (~chars/4); plain = exact provider usage. */
+function tokenLabel(
+  tokens: { inputTokens: number; outputTokens: number; source: "api" | "estimated" } | null | undefined,
+): string {
+  if (!tokens) return "tokens n/a";
+  const prefix = tokens.source === "api" ? "" : "~";
+  return `${prefix}${formatNum(tokens.inputTokens)} in / ${prefix}${formatNum(tokens.outputTokens)} out`;
 }
 
 function shortSummary(trace: AgentTrace | null, frontendError?: FrontendErrorTrace | null): string {
@@ -160,6 +176,7 @@ export function TempAgentTrace({ trace, frontendError, durationMs }: TempAgentTr
     <details style={box} data-testid="temp-agent-trace">
       <summary style={summaryRow}>
         {dot} agent trace — {shortSummary(trace, frontendError)}
+        {trace && <span style={{ color: "#43585e", fontWeight: 400 }}> · {tokenLabel(trace.totalTokens)} tokens</span>}
         {typeof durationMs === "number" && (
           <span style={{ color: "#43585e", fontWeight: 400 }}> · {durationMs}ms</span>
         )}
@@ -170,6 +187,21 @@ export function TempAgentTrace({ trace, frontendError, durationMs }: TempAgentTr
         <div>
           <span style={label}>model: </span>
           <code>{trace?.model ?? "(none — bridge never reached the LLM)"}</code>
+        </div>
+        <div>
+          <span style={label}>tokens (total): </span>
+          {trace?.totalTokens ? (
+            <>
+              <code>
+                {tokenLabel(trace.totalTokens)} · {formatNum(trace.totalTokens.totalTokens)} total
+              </code>
+              <span style={badge(trace.totalTokens.source === "api")}>
+                {trace.totalTokens.source === "api" ? "exact (provider usage)" : "~ estimated (no usage in response)"}
+              </span>
+            </>
+          ) : (
+            "—"
+          )}
         </div>
         <div>
           <span style={label}>mcp: </span>
@@ -199,10 +231,43 @@ export function TempAgentTrace({ trace, frontendError, durationMs }: TempAgentTr
                 <span style={badge(step.toolCalls.length === 0)}>
                   {step.toolCalls.length === 0 ? "no tool call" : `${step.toolCalls.length} tool call${step.toolCalls.length === 1 ? "" : "s"}`}
                 </span>
+                {step.tokens && (
+                  <span style={{ color: "#43585e", fontWeight: 400, fontSize: 12 }}>
+                    {" "}· {tokenLabel(step.tokens)}
+                    {step.tokens.source === "estimated" ? " ~" : ""}
+                  </span>
+                )}
                 {step.llmError && <span style={badge(false)}>llm error</span>}
               </summary>
               <div style={{ padding: "6px 10px 10px" }}>
-                <div style={label}>① LLM thought / draft (raw content)</div>
+                {step.tokens && (
+                  <details style={{ marginBottom: 6 }}>
+                    <summary style={{ cursor: "pointer", color: "#43585e" }}>
+                      tokens: <code>{tokenLabel(step.tokens)} · {formatNum(step.tokens.totalTokens)} total</code>
+                      <span style={badge(step.tokens.source === "api")}>
+                        {step.tokens.source === "api" ? "exact" : "~ estimated"}
+                      </span>
+                    </summary>
+                    <div style={{ fontSize: 12, color: "#43585e", marginTop: 4 }}>
+                      <div>input (sent to model: messages + tool schemas): <code>{formatNum(step.tokens.inputTokens)}</code></div>
+                      <div>output (model reply: content + tool calls): <code>{formatNum(step.tokens.outputTokens)}</code></div>
+                      {step.tokens.source === "api" && step.tokens.raw ? (
+                        <pre style={pre}>{JSON.stringify(step.tokens.raw, null, 2)}</pre>
+                      ) : (
+                        <div>source: provider omitted <code>usage</code> → approx ~chars/4 of the request/response JSON.</div>
+                      )}
+                    </div>
+                  </details>
+                )}
+                <div style={label}>
+                  ① LLM thought / draft (raw content)
+                  {step.tokens && (
+                    <span style={{ fontWeight: 400 }}>
+                      {" "}— output: {step.tokens.source === "api" ? "" : "~"}{formatNum(step.tokens.outputTokens)} tokens
+                      {step.tokens.source === "api" ? " (exact)" : " (est.)"}
+                    </span>
+                  )}
+                </div>
                 {step.llmThought ? <pre style={pre}>{step.llmThought}</pre> : <p style={{ margin: "4px 0" }}>— (empty: model said nothing before acting)</p>}
 
                 <div style={{ ...label, marginTop: 8 }}>② tool calls (the model&apos;s decisions)</div>
