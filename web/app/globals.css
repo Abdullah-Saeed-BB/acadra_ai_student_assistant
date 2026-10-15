@@ -830,7 +830,7 @@ a {
   padding: 11px 16px;
   background: var(--action-teal);
   color: var(--white);
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 18px;
 }
 
 .chat-thinking {
