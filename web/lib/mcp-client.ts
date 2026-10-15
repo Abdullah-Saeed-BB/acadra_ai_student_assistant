@@ -36,7 +36,9 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const BRIDGE_CLIENT_NAME = "acadra-web-bridge";
 const BRIDGE_CLIENT_VERSION = "0.1.0";
 
-export const MCP_SERVER_URL = (process.env.MCP_SERVER_URL?.trim() || DEFAULT_MCP_SERVER_URL).replace(/\/+$/, "");
+export const MCP_SERVER_URL = (
+  process.env.MCP_SERVER_URL?.trim() || DEFAULT_MCP_SERVER_URL
+).replace(/\/+$/, "");
 
 export type ChatRole = "user" | "assistant";
 
@@ -60,7 +62,12 @@ export type StudyToolError = {
 };
 
 export type StudyToolOutcome =
-  | { tool: string; ok: true; data: Record<string, unknown>; text: string | null }
+  | {
+      tool: string;
+      ok: true;
+      data: Record<string, unknown>;
+      text: string | null;
+    }
   | { tool: string; ok: false; error: StudyToolError };
 
 /**
@@ -73,7 +80,10 @@ export type StudyToolOutcome =
 export class McpUnavailableError extends Error {
   /** Partial agent trace collected before the failure, so the bridge can still return it. */
   agentTrace?: AgentTrace | null;
-  constructor(message = "The study planner MCP server is unavailable.", trace?: AgentTrace | null) {
+  constructor(
+    message = "The study planner MCP server is unavailable.",
+    trace?: AgentTrace | null,
+  ) {
     super(message);
     this.name = "McpUnavailableError";
     this.agentTrace = trace ?? null;
@@ -135,19 +145,27 @@ type McpToolResult = Awaited<ReturnType<Client["callTool"]>>;
  * left alone because they carry the long-lived SSE stream; POST and DELETE calls
  * get a combined signal that still honours the transport's own abort.
  */
-function createFetch(): (url: string | URL, init?: RequestInit) => Promise<Response> {
+function createFetch(): (
+  url: string | URL,
+  init?: RequestInit,
+) => Promise<Response> {
   return (url, init) => {
     const method = (init?.method ?? "GET").toUpperCase();
     if (method === "GET") {
       return fetch(url, init);
     }
     const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-    const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+    const signal = init?.signal
+      ? AbortSignal.any([init.signal, timeout])
+      : timeout;
     return fetch(url, { ...init, signal });
   };
 }
 
-async function closeClient(client: Client, transport: StreamableHTTPClientTransport): Promise<void> {
+async function closeClient(
+  client: Client,
+  transport: StreamableHTTPClientTransport,
+): Promise<void> {
   // Terminate the session first (best effort; a stateless server answers 405),
   // then drop the transport and its open SSE stream.
   try {
@@ -166,7 +184,9 @@ async function closeClient(client: Client, transport: StreamableHTTPClientTransp
  * Opens one client/transport pair for the lifetime of `run`, then always closes
  * it. Infrastructure failures are normalised to `McpUnavailableError`.
  */
-async function withStudyClient<T>(run: (client: Client) => Promise<T>): Promise<T> {
+async function withStudyClient<T>(
+  run: (client: Client) => Promise<T>,
+): Promise<T> {
   const transport = new StreamableHTTPClientTransport(new URL(MCP_SERVER_URL), {
     fetch: createFetch(),
     requestInit: { cache: "no-store" },
@@ -189,7 +209,9 @@ async function withStudyClient<T>(run: (client: Client) => Promise<T>): Promise<
     return await run(client);
   } catch (error) {
     if (error instanceof McpUnavailableError) throw error;
-    throw new McpUnavailableError(`The study planner MCP request failed: ${describeError(error)}`);
+    throw new McpUnavailableError(
+      `The study planner MCP request failed: ${describeError(error)}`,
+    );
   } finally {
     await closeClient(client, transport);
   }
@@ -230,7 +252,10 @@ type ToolCallPayload = {
   toolResult?: unknown;
 };
 
-function normalizeToolResult(tool: string, result: McpToolResult): StudyToolOutcome {
+function normalizeToolResult(
+  tool: string,
+  result: McpToolResult,
+): StudyToolOutcome {
   const payload = result as ToolCallPayload;
 
   // Some servers answer with the legacy `toolResult` shape.
@@ -250,7 +275,10 @@ function normalizeToolResult(tool: string, result: McpToolResult): StudyToolOutc
   return { tool, ok: true, data: parsed ?? {}, text: rawText };
 }
 
-function extractError(parsed: Record<string, unknown> | null, rawText: string | null): StudyToolError {
+function extractError(
+  parsed: Record<string, unknown> | null,
+  rawText: string | null,
+): StudyToolError {
   const envelope = parsed?.error;
   if (envelope && typeof envelope === "object") {
     const error = envelope as Record<string, unknown>;
@@ -264,7 +292,8 @@ function extractError(parsed: Record<string, unknown> | null, rawText: string | 
   }
   return {
     code: "error",
-    message: rawText?.trim() || "The study planner could not complete that request.",
+    message:
+      rawText?.trim() || "The study planner could not complete that request.",
   };
 }
 
@@ -307,7 +336,9 @@ function describeError(error: unknown): string {
  * model is configured, or the model request fails, so the route can report
  * "bridge down" and the simulator can answer with its fallback message.
  */
-export async function replyToConversation(messages: StudyChatMessage[]): Promise<string> {
+export async function replyToConversation(
+  messages: StudyChatMessage[],
+): Promise<string> {
   const { reply } = await replyWithTrace(messages);
   return reply;
 }
@@ -334,7 +365,8 @@ export async function replyWithTrace(
       error: {
         source: "llm",
         message: "The chat model is not configured.",
-        detail: "Set MODEL_PROVIDER/MODEL_NAME plus its API key (GROQ_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY).",
+        detail:
+          "Set MODEL_PROVIDER/MODEL_NAME plus its API key (GROQ_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY).",
       },
     };
     throw new McpUnavailableError(
@@ -360,13 +392,18 @@ export async function replyWithTrace(
     try {
       ({ tools: studyTools } = await client.listTools());
     } catch (error) {
-      return fail(`The study planner MCP request failed: ${describeError(error)}`, {
-        source: "mcp",
-        message: "tools/list failed.",
-        detail: describeError(error),
-      });
+      return fail(
+        `The study planner MCP request failed: ${describeError(error)}`,
+        {
+          source: "mcp",
+          message: "tools/list failed.",
+          detail: describeError(error),
+        },
+      );
     }
-    const filtered = studyTools.filter((tool) => tool.name.startsWith("study_"));
+    const filtered = studyTools.filter((tool) =>
+      tool.name.startsWith("study_"),
+    );
     trace.toolsDiscovered = filtered.map((tool) => tool.name);
     if (filtered.length === 0) {
       return fail("The study planner exposed no study_* tools.", {
@@ -398,7 +435,12 @@ export async function replyWithTrace(
     ];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const step: AgentStepTrace = { round: round + 1, llmThought: null, toolCalls: [], toolOutputs: [] };
+      const step: AgentStepTrace = {
+        round: round + 1,
+        llmThought: null,
+        toolCalls: [],
+        toolOutputs: [],
+      };
       trace.steps.push(step);
 
       let answer: { content: string | null; tool_calls?: ChatToolCall[] };
@@ -445,13 +487,26 @@ export async function replyWithTrace(
         });
         let resultText: string;
         try {
-          const result = await client.callTool({ name: call.function.name, arguments: args });
+          const result = await client.callTool({
+            name: call.function.name,
+            arguments: args,
+          });
           const outcome = normalizeToolResult(call.function.name, result);
           resultText = renderOutcome(outcome);
           step.toolOutputs.push(
             outcome.ok
-              ? { tool: outcome.tool, ok: true, renderedText: resultText, data: outcome.data }
-              : { tool: outcome.tool, ok: false, renderedText: resultText, error: outcome.error },
+              ? {
+                  tool: outcome.tool,
+                  ok: true,
+                  renderedText: resultText,
+                  data: outcome.data,
+                }
+              : {
+                  tool: outcome.tool,
+                  ok: false,
+                  renderedText: resultText,
+                  error: outcome.error,
+                },
           );
         } catch (error) {
           const detail = describeError(error);
@@ -463,14 +518,19 @@ export async function replyWithTrace(
             error: { code: "error", message: resultText },
           });
         }
-        chatMessages.push({ role: "tool", tool_call_id: call.id, content: resultText });
+        chatMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: resultText,
+        });
       }
     }
 
     return fail("The chat model did not finish within its tool budget.", {
       source: "llm",
       message: `Model kept calling tools for ${MAX_TOOL_ROUNDS} rounds without a final answer.`,
-      detail: "Increase MAX_TOOL_ROUNDS or inspect the last step's tool outputs.",
+      detail:
+        "Increase MAX_TOOL_ROUNDS or inspect the last step's tool outputs.",
     });
   });
 }
@@ -506,11 +566,18 @@ type LlmConfig = { baseUrl: string; apiKey: string; model: string };
 function getLlmConfig(): LlmConfig | null {
   const provider = (process.env.MODEL_PROVIDER?.trim() || "groq").toLowerCase();
   const model =
-    process.env.MODEL_NAME?.trim() || process.env.GROQ_MODEL?.trim() || "openai/gpt-oss-120b";
+    process.env.MODEL_NAME?.trim() ||
+    process.env.GROQ_MODEL?.trim() ||
+    "openai/gpt-oss-120b";
   if (provider === "openrouter") {
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) return null;
     return { baseUrl: "https://openrouter.ai/api/v1", apiKey, model };
+  }
+  if (provider === "deepseek") {
+    const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+    if (!apiKey) return null;
+    return { baseUrl: "https://api.deepseek.com", apiKey, model };
   }
   if (provider === "openai") {
     const apiKey = process.env.OPENAI_API_KEY?.trim();
@@ -527,7 +594,11 @@ async function completeChat(
   chatMessages: ChatCompletionMessage[],
   chatTools: Array<{
     type: "function";
-    function: { name: string; description: string; parameters: Record<string, unknown> };
+    function: {
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+    };
   }>,
 ): Promise<{ content: string | null; tool_calls?: ChatToolCall[] }> {
   let response: Response;
@@ -548,13 +619,19 @@ async function completeChat(
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
-    throw new McpUnavailableError(`The chat model request failed: ${describeError(error)}`);
+    throw new McpUnavailableError(
+      `The chat model request failed: ${describeError(error)}`,
+    );
   }
   if (!response.ok) {
-    throw new McpUnavailableError(`The chat model request failed with status ${response.status}.`);
+    throw new McpUnavailableError(
+      `The chat model request failed with status ${response.status}.`,
+    );
   }
   const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string | null; tool_calls?: ChatToolCall[] } }>;
+    choices?: Array<{
+      message?: { content?: string | null; tool_calls?: ChatToolCall[] };
+    }>;
   };
   const message = data.choices?.[0]?.message;
   if (!message) {
@@ -577,7 +654,9 @@ function parseToolArguments(raw: string): Record<string, unknown> {
 
 function renderOutcome(outcome: StudyToolOutcome): string {
   if (!outcome.ok) {
-    return outcome.error.hint ? `${outcome.error.message} ${outcome.error.hint}` : outcome.error.message;
+    return outcome.error.hint
+      ? `${outcome.error.message} ${outcome.error.hint}`
+      : outcome.error.message;
   }
 
   const data = outcome.data;
@@ -589,7 +668,10 @@ function renderOutcome(outcome: StudyToolOutcome): string {
     return preferencesReply(data);
   }
 
-  const summary = typeof data.markdown_summary === "string" ? data.markdown_summary.trim() : "";
+  const summary =
+    typeof data.markdown_summary === "string"
+      ? data.markdown_summary.trim()
+      : "";
   if (summary) {
     return toPlainText(summary);
   }
@@ -637,7 +719,12 @@ function preferencesReply(data: Record<string, unknown>): string {
 function toPlainText(markdown: string): string {
   return markdown
     .split("\n")
-    .map((line) => line.replace(/^#{1,6}\s*/, "").replace(/\*\*(.+?)\*\*/g, "$1").trimEnd())
+    .map((line) =>
+      line
+        .replace(/^#{1,6}\s*/, "")
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .trimEnd(),
+    )
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
