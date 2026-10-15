@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AcadraLogo } from "@/components/acadra-mark";
@@ -226,8 +226,26 @@ export function Sidebar() {
     () => false,
   );
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   return (
-    <aside className={collapsed ? "sidebar is-collapsed" : "sidebar"}>
+    <aside
+      className={
+        collapsed
+          ? open
+            ? "sidebar is-collapsed is-open"
+            : "sidebar is-collapsed"
+          : open
+            ? "sidebar is-open"
+            : "sidebar"
+      }>
       <div className="sidebar-top">
         <Link href="/" className="brand" aria-label="Acadra home">
           <AcadraLogo />
@@ -277,6 +295,15 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+      {open ? (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Close menu"
+          tabIndex={-1}
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
     </aside>
   );
 }
