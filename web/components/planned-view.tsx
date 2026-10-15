@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
 
 /**
  * A branded placeholder for a route that is planned but not built yet. It keeps
@@ -16,11 +17,7 @@ export function PlannedView({
 }) {
   return (
     <div className="page">
-      <header className="page-header">
-        <p className="eyebrow">Planned view</p>
-        <h1 className="page-title">{title}</h1>
-        <p className="page-lede">{description}</p>
-      </header>
+      <PageHeader title={title} description={description} />
 
       <section className="panel">
         <p className="panel-note">

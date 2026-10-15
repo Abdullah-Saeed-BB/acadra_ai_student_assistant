@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = {
   title: "Today",
@@ -8,14 +9,10 @@ export const metadata: Metadata = {
 export default function TodayPage() {
   return (
     <div className="page">
-      <header className="page-header">
-        <p className="eyebrow">Today</p>
-        <h1 className="page-title display-accent">Today</h1>
-        <p className="page-lede">
-          Your short list for the day. Every step names the action, how long it takes, and
-          why it matters now, with the source it came from kept beside it.
-        </p>
-      </header>
+      <PageHeader
+        title="Today"
+        description="Your short list for the day. Every step names the action, how long it takes, and why it matters now, with the source it came from kept beside it."
+      />
 
       <dl className="stat-row">
         <div className="stat">
