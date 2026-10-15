@@ -418,6 +418,12 @@ a {
   letter-spacing: -0.01em;
 }
 
+.upcoming-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
 /* ------------------------------------------------------------- task card -- */
 
 /* Each task is its own container, so every fact it carries has room. */

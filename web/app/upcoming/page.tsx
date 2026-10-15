@@ -53,27 +53,29 @@ export default async function UpcomingPage() {
           </div>
         </section>
       ) : (
-        upcoming?.days.map((group) => (
-          <section
-            key={group.day}
-            className="panel"
-            aria-labelledby={`day-${group.day}`}>
-            <p className="panel-note">
-              <span id={`day-${group.day}`}>
-                {group.day} · {group.tasks.length}{" "}
-                {group.tasks.length === 1 ? "task" : "tasks"} ·{" "}
-                <span className="tnum">
-                  {group.total_estimated_minutes} min
+        <div className="upcoming-tasks">
+          {upcoming?.days.map((group) => (
+            <section
+              key={group.day}
+              className="panel"
+              aria-labelledby={`day-${group.day}`}>
+              <p className="panel-note">
+                <span id={`day-${group.day}`}>
+                  {group.day} · {group.tasks.length}{" "}
+                  {group.tasks.length === 1 ? "task" : "tasks"} ·{" "}
+                  <span className="tnum">
+                    {group.total_estimated_minutes} min
+                  </span>
                 </span>
-              </span>
-            </p>
-            {group.tasks.length > 0 ? (
-              <TaskList tasks={group.tasks} />
-            ) : (
-              <p className="panel-note">No tasks selected for this day.</p>
-            )}
-          </section>
-        ))
+              </p>
+              {group.tasks.length > 0 ? (
+                <TaskList tasks={group.tasks} />
+              ) : (
+                <p className="panel-note">No tasks selected for this day.</p>
+              )}
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );
