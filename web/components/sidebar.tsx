@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AcadraLogo } from "@/components/acadra-mark";
@@ -188,7 +193,10 @@ const NAV_GROUPS: NavGroup[] = [
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    pathname === href ||
+    (pathname.startsWith(`${href}/`) && pathname !== "tasks")
+  );
 }
 
 const COLLAPSE_STORAGE_KEY = "acadra:sidebar-collapsed";
