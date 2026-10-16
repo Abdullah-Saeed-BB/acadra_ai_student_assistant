@@ -17,8 +17,20 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 from src.api.openapi import build_openapi_spec
 from src.api.routes.academic_items import get_academic_items, get_item_evidence
+from src.api.routes.courses import get_courses
 from src.api.routes.gmail import authorize_gmail, get_gmail_configuration, gmail_callback, put_gmail_configuration
 from src.api.routes.manual_text import add_manual_file, add_manual_text, get_source_candidates
+from src.api.routes.tasks import (
+    create_task_route,
+    delete_task_route,
+    get_backlog_route,
+    get_task_route,
+    get_today_plan_route,
+    get_upcoming_plan_route,
+    list_tasks_route,
+    reorder_tasks_route,
+    update_task_route,
+)
 from src.server import mcp
 
 SWAGGER_UI_HTML = """<!DOCTYPE html>
@@ -75,6 +87,16 @@ app.add_route("/api/sources/{source_document_id}/candidates", get_source_candida
 app.add_route("/api/sources/text/{source_document_id}/candidates", get_source_candidates, methods=["GET"])
 app.add_route("/api/academic-items", get_academic_items, methods=["GET"])
 app.add_route("/api/academic-items/{item_id}/evidence", get_item_evidence, methods=["GET"])
+app.add_route("/api/courses", get_courses, methods=["GET"])
+app.add_route("/api/tasks", list_tasks_route, methods=["GET"])
+app.add_route("/api/tasks", create_task_route, methods=["POST"])
+app.add_route("/api/tasks/reorder", reorder_tasks_route, methods=["POST"])
+app.add_route("/api/tasks/{task_id}", get_task_route, methods=["GET"])
+app.add_route("/api/tasks/{task_id}", update_task_route, methods=["PATCH"])
+app.add_route("/api/tasks/{task_id}", delete_task_route, methods=["DELETE"])
+app.add_route("/api/plan/today", get_today_plan_route, methods=["GET"])
+app.add_route("/api/plan/upcoming", get_upcoming_plan_route, methods=["GET"])
+app.add_route("/api/plan/backlog", get_backlog_route, methods=["GET"])
 app.add_route("/api/connections/gmail", get_gmail_configuration, methods=["GET"])
 app.add_route("/api/connections/gmail", put_gmail_configuration, methods=["PUT"])
 app.add_route("/api/connections/gmail/authorize", authorize_gmail, methods=["GET"])

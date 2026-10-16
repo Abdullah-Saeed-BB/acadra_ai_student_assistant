@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { TaskList } from "@/components/task-list";
+import { TaskGroup } from "@/components/task-group";
+import { TaskCreateButton } from "@/components/task-create";
 import { backendUnavailableMessage, getUpcomingPlan } from "@/lib/tasks";
 
 export const metadata: Metadata = {
   title: "Upcoming",
 };
+
+function nextUtcDay(iso: string): string {
+  const day = new Date(`${iso}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + 1);
+  return day.toISOString().slice(0, 10);
+}
 
 export default async function UpcomingPage() {
   let upcoming = null;
@@ -18,12 +25,15 @@ export default async function UpcomingPage() {
       cause instanceof Error ? cause.message : backendUnavailableMessage();
   }
 
+  const startDay = upcoming?.start_day ?? new Date().toISOString().slice(0, 10);
+
   return (
     <div className="page">
       <PageHeader
         title="Upcoming"
-        description="Tasks selected for the next days, grouped by day."
-      />
+        description="Tasks selected for the next days, grouped by day.">
+        <TaskCreateButton defaultDay={nextUtcDay(startDay)} />
+      </PageHeader>
 
       {error ? (
         <section className="panel">
@@ -38,17 +48,14 @@ export default async function UpcomingPage() {
         </section>
       ) : upcoming &&
         upcoming.days.every((group) => group.tasks.length === 0) ? (
-        <section className="panel">
+        <section className="panel empty">
           <p className="panel-note">
             Nothing is scheduled for {upcoming.start_day} to {upcoming.end_day}{" "}
             yet. Choose a day for a backlog task to place it here.
           </p>
           <div className="page-actions">
-            <Link className="connect-button" href="/backlog">
+            <Link className="page-link" href="/backlog">
               Review backlog
-            </Link>
-            <Link className="page-link" href="/tasks/new">
-              New task
             </Link>
           </div>
         </section>
@@ -69,7 +76,7 @@ export default async function UpcomingPage() {
                 </span>
               </p>
               {group.tasks.length > 0 ? (
-                <TaskList tasks={group.tasks} />
+                <TaskGroup tasks={group.tasks} />
               ) : (
                 <p className="panel-note">No tasks selected for this day.</p>
               )}

@@ -157,7 +157,7 @@ def build_openapi_spec(
             operations[method_lower] = op_dict
 
         if operations:
-            paths[path] = operations
+            paths.setdefault(path, {}).update(operations)
 
     spec: dict[str, Any] = {
         "openapi": "3.1.0",

@@ -510,6 +510,65 @@ class TestStudyPlannerMCPServer(unittest.IsolatedAsyncioTestCase):
                 await session.execute(delete(Task).where(Task.parent_task_id == UUID(task_id)))
                 await session.execute(delete(Task).where(Task.id == UUID(task_id)))
 
+    async def test_nested_steps_rejected(self):
+        # Steps are one level deep. Creating a step under a step, splitting a
+        # step, or making a task that has steps become a step are all rejected.
+        res = await self.server.call_tool(
+            "study_create_task", {"title": "Parent for nesting"}
+        )
+        is_err, parent = parse_result(res)
+        self.assertFalse(is_err)
+        parent_id = parent["id"]
+
+        res = await self.server.call_tool(
+            "study_create_task",
+            {"title": "A single step", "parent_task_id": parent_id},
+        )
+        is_err, step = parse_result(res)
+        self.assertFalse(is_err)
+        step_id = step["id"]
+        self.assertEqual(step["parent_task_id"], parent_id)
+
+        # A step cannot contain its own steps.
+        res = await self.server.call_tool(
+            "study_create_task",
+            {"title": "Nested step", "parent_task_id": step_id},
+        )
+        is_err, err = parse_result(res)
+        self.assertTrue(is_err)
+        self.assertEqual(err["error"]["code"], "invalid_input")
+
+        # A step cannot be split into further steps.
+        res = await self.server.call_tool(
+            "study_split_task",
+            {"task_id": step_id, "steps": [{"title": "Nope"}]},
+        )
+        is_err, err = parse_result(res)
+        self.assertTrue(is_err)
+        self.assertEqual(err["error"]["code"], "invalid_input")
+
+        # A task that has steps cannot become a step itself.
+        res = await self.server.call_tool(
+            "study_create_task", {"title": "Another top-level task"}
+        )
+        is_err, other = parse_result(res)
+        self.assertFalse(is_err)
+        res = await self.server.call_tool(
+            "study_update_task",
+            {"task_id": parent_id, "parent_task_id": other["id"]},
+        )
+        is_err, err = parse_result(res)
+        self.assertTrue(is_err)
+        self.assertEqual(err["error"]["code"], "invalid_input")
+
+        # Cleanup: delete children before the parents.
+        async with get_session(expire_on_commit=False) as session:
+            async with session.begin():
+                await session.execute(delete(Task).where(Task.parent_task_id == UUID(parent_id)))
+                await session.execute(
+                    delete(Task).where(Task.id.in_([UUID(parent_id), UUID(other["id"])]))
+                )
+
     async def test_operator_tools(self):
         res_conn = await self.server.call_tool("study_get_gmail_connection", {})
         is_err, conn = parse_result(res_conn)

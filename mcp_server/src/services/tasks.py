@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import cast, delete, func, select
+from sqlalchemy import cast, delete, func, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 
 from src.db.schema import AcademicItem, Course, Task
@@ -65,6 +65,15 @@ class BacklogView:
 class PlanBoardView:
     columns: list[dict[str, Any]]
     backlog: list[Task]
+
+
+@dataclass(frozen=True)
+class TaskDeletionView:
+    task_id: UUID
+    title: str
+    deleted_steps: int
+    academic_item_id: UUID | None
+    course_id: UUID | None
 
 
 async def list_tasks(
@@ -193,6 +202,11 @@ async def create_task(
                 parent = await session.get(Task, parent_task_id)
                 if parent is None:
                     raise NotFoundError(f"Parent task {parent_task_id} does not exist.")
+                # Steps are one level deep: a step cannot contain its own steps.
+                if parent.parent_task_id is not None:
+                    raise InvalidInputError(
+                        "A step cannot contain its own steps. Add steps only to a top-level task."
+                    )
                 if academic_item_id is None:
                     academic_item_id = parent.academic_item_id
                 if course_id is None:
@@ -253,10 +267,20 @@ async def update_task(
     clear_selected_day: bool = False,
     list_position: int | None = None,
     estimated_minutes: int | None = None,
+    clear_estimated_minutes: bool = False,
     tags: list[str] | None = None,
     parent_task_id: UUID | None = None,
+    academic_item_id: UUID | None = None,
+    clear_academic_item: bool = False,
+    course_id: UUID | None = None,
+    clear_course: bool = False,
 ) -> Task:
-    """Partially update an existing task."""
+    """Partially update an existing task.
+
+    Link fields accept either a new UUID (validated to exist) or an explicit
+    clear flag, so a task can be connected to or disconnected from an academic
+    item or course without changing its other fields.
+    """
     async with get_session(expire_on_commit=False) as session:
         async with session.begin():
             task = await session.get(Task, task_id, with_for_update=True)
@@ -275,25 +299,115 @@ async def update_task(
                 elif status != "done" and task.status == "done":
                     task.completed_at = None
                 task.status = status
+                # Marking a task done (or returning it to todo) applies to its
+                # steps too, so a completed parent never leaves open steps.
+                if status in ("done", "todo"):
+                    await session.execute(
+                        update(Task)
+                        .where(Task.parent_task_id == task_id)
+                        .values(
+                            status=status,
+                            completed_at=task.completed_at,
+                            updated_at=now,
+                        )
+                    )
             if clear_selected_day:
                 task.selected_day = None
             elif selected_day is not None:
                 task.selected_day = selected_day
             if list_position is not None:
                 task.list_position = list_position
-            if estimated_minutes is not None:
+            if clear_estimated_minutes:
+                task.estimated_minutes = None
+            elif estimated_minutes is not None:
                 task.estimated_minutes = estimated_minutes
             if tags is not None:
                 task.tags = tags
             if parent_task_id is not None:
+                if parent_task_id == task_id:
+                    raise InvalidInputError("A task cannot be its own parent.")
                 parent = await session.get(Task, parent_task_id)
                 if parent is None:
                     raise NotFoundError(f"Parent task {parent_task_id} does not exist.")
+                # Steps are one level deep: a step cannot contain its own steps,
+                # and a task that already has steps cannot become a step.
+                if parent.parent_task_id is not None:
+                    raise InvalidInputError(
+                        "A step cannot contain its own steps. Add steps only to a top-level task."
+                    )
+                child_count = await session.scalar(
+                    select(func.count()).select_from(Task).where(Task.parent_task_id == task_id)
+                )
+                if child_count:
+                    raise InvalidInputError(
+                        "A task that has steps cannot become a step itself."
+                    )
+                # Walk the ancestor chain so a task can never become its own descendant.
+                ancestor_id = parent.parent_task_id
+                for _ in range(64):
+                    if ancestor_id is None:
+                        break
+                    if ancestor_id == task_id:
+                        raise InvalidInputError(
+                            "A task cannot be moved under one of its own steps."
+                        )
+                    ancestor = await session.get(Task, ancestor_id)
+                    if ancestor is None:
+                        break
+                    ancestor_id = ancestor.parent_task_id
                 task.parent_task_id = parent_task_id
+
+            if clear_academic_item:
+                task.academic_item_id = None
+            elif academic_item_id is not None:
+                item = await session.get(AcademicItem, academic_item_id)
+                if item is None:
+                    raise NotFoundError(f"Academic item {academic_item_id} does not exist.")
+                task.academic_item_id = academic_item_id
+
+            if clear_course:
+                task.course_id = None
+            elif course_id is not None:
+                course = await session.get(Course, course_id)
+                if course is None:
+                    raise NotFoundError(f"Course {course_id} does not exist.")
+                task.course_id = course_id
 
             task.updated_at = now
             await session.flush()
         return task
+
+
+async def delete_task(task_id: UUID) -> TaskDeletionView:
+    """Delete a task together with its child steps.
+
+    Academic items and courses own their links through ``tasks``: deleting a
+    task only clears those references. The linked item and course rows are
+    never removed here, and the returned view reports which links existed.
+    """
+    async with get_session(expire_on_commit=False) as session:
+        async with session.begin():
+            task = await session.get(Task, task_id, with_for_update=True)
+            if task is None:
+                raise NotFoundError(f"Task {task_id} was not found.")
+
+            step_count = await session.scalar(
+                select(func.count()).select_from(Task).where(Task.parent_task_id == task_id)
+            )
+
+            # Remove children first so the parent delete cannot fail on a foreign key.
+            await session.execute(delete(Task).where(Task.parent_task_id == task_id))
+
+            deletion = TaskDeletionView(
+                task_id=task.id,
+                title=task.title,
+                deleted_steps=int(step_count or 0),
+                academic_item_id=task.academic_item_id,
+                course_id=task.course_id,
+            )
+            await session.delete(task)
+            await session.flush()
+        return deletion
 
 
 async def move_task(task_id: UUID, selected_day: date | None) -> Task:
@@ -360,6 +474,16 @@ async def complete_task(task_id: UUID, done: bool) -> Task:
                 task.status = "todo"
                 task.completed_at = None
             task.updated_at = now
+            # Completing a task completes its steps; reopening it reopens them.
+            await session.execute(
+                update(Task)
+                .where(Task.parent_task_id == task_id)
+                .values(
+                    status=task.status,
+                    completed_at=task.completed_at,
+                    updated_at=now,
+                )
+            )
             await session.flush()
         return task
 
@@ -375,6 +499,12 @@ async def split_task(
             parent = await session.get(Task, task_id, with_for_update=True)
             if parent is None:
                 raise NotFoundError(f"Task {task_id} was not found.")
+
+            # Steps are one level deep: only a top-level task can be split.
+            if parent.parent_task_id is not None:
+                raise InvalidInputError(
+                    "A step cannot be split into further steps. Split only a top-level task."
+                )
 
             if replace_existing:
                 await session.execute(

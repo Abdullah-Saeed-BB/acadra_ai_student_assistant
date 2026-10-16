@@ -188,6 +188,7 @@ def register(mcp: FastMCP) -> None:
         clear_selected_day: Annotated[bool, Field(default=False, description="Set true to move task to backlog")] = False,
         list_position: Annotated[int | None, Field(default=None, ge=0)] = None,
         estimated_minutes: Annotated[int | None, Field(default=None, ge=1, le=1440)] = None,
+        clear_estimated_minutes: Annotated[bool, Field(default=False, description="Set true to remove the effort estimate")] = False,
         tags: Annotated[list[str] | None, Field(default=None)] = None,
         parent_task_id: Annotated[str | None, Field(default=None)] = None,
     ) -> dict[str, Any]:
@@ -207,6 +208,7 @@ def register(mcp: FastMCP) -> None:
             clear_selected_day=clear_selected_day,
             list_position=list_position,
             estimated_minutes=estimated_minutes,
+            clear_estimated_minutes=clear_estimated_minutes,
             tags=tags,
             parent_task_id=p_parent,
         )

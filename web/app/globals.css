@@ -320,7 +320,24 @@ a {
 }
 
 .page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 30px;
+}
+
+.page-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.page-header-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .eyebrow {
@@ -418,6 +435,18 @@ a {
   letter-spacing: -0.01em;
 }
 
+.panel.empty {
+  border: none;
+  background-color: transparent;
+  padding: 50px 35px;
+  text-align: center;
+}
+
+.panel.empty * {
+  max-width: 100%;
+  width: 100%;
+}
+
 .upcoming-tasks {
   display: flex;
   flex-direction: column;
@@ -454,11 +483,12 @@ a {
 .task-card-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .task-card-title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 18px;
   font-weight: 700;
@@ -527,13 +557,255 @@ a {
   font-weight: 600;
 }
 
+/* Steps nested inside their parent's container: an indented, rule-led block. */
+.task-card-steps {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+  padding-left: 14px;
+  border-left: 2px solid var(--line);
+}
+
+.task-card.is-nested {
+  gap: 8px;
+  padding: 14px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.task-card-steps .task-card + .task-card {
+  border-top: 1px solid var(--line);
+}
+
+.task-card.is-nested .task-card-title {
+  font-size: 15px;
+}
+
+.task-card.is-nested .task-card-status {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.task-card.is-nested .task-card-details {
+  font-size: 14px;
+}
+
+.task-card.is-nested .task-card-meta {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.task-card.is-nested .task-card-meta > div {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.task-card.is-nested .task-card-meta dt {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.task-card.is-nested .task-card-meta dd {
+  font-size: 14px;
+}
+
+/* -------------------------------------------------------- task actions -- */
+
+/* The drag handle, check circle, and edit button every task row carries. The
+   handle stays out of the way until the mouse is near the task. */
+.task-drag-handle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.task-card:hover .task-drag-handle,
+.task-card:focus-within .task-drag-handle,
+.agenda-step:hover .task-drag-handle,
+.agenda-step:focus-within .task-drag-handle,
+.task-drag-handle:focus-visible,
+.task-drag-handle.is-armed,
+.is-dragging .task-drag-handle {
+  opacity: 1;
+}
+
+.task-drag-handle:hover {
+  color: var(--action-teal);
+  background: rgba(12, 119, 109, 0.08);
+  border-color: var(--line);
+}
+
+.task-drag-handle.is-armed,
+.task-drag-handle:active {
+  color: var(--action-teal);
+  background: rgba(12, 119, 109, 0.12);
+  border-color: var(--line);
+  cursor: grabbing;
+}
+
+/* Touch devices have no hover, so the handle is always visible there. */
+@media (hover: none) {
+  .task-drag-handle {
+    opacity: 1;
+  }
+}
+
+.task-check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  padding: 0;
+  color: var(--white);
+  background: transparent;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* The faint tick hints that the circle completes the task on click. */
+.task-check .task-check-hint {
+  color: var(--action-teal);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.task-check:hover {
+  border-color: var(--action-teal);
+}
+
+.task-check:hover .task-check-hint {
+  opacity: 0.55;
+}
+
+.task-check.is-done {
+  background: var(--action-teal);
+  border-color: var(--action-teal);
+}
+
+.task-check:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.task-edit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-top: -2px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.task-edit:hover {
+  color: var(--action-teal);
+  background: rgba(12, 119, 109, 0.08);
+  border-color: var(--line);
+}
+
+/* The task being dragged keeps its place but fades until it is dropped. */
+.task-card.is-dragging,
+.agenda-step.is-dragging {
+  opacity: 0.55;
+}
+
+.task-cards.is-dragging,
+.agenda.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Completed tasks read as finished without leaving their list. */
+.task-card.is-done .task-card-title {
+  color: var(--muted);
+}
+
+/* A floating notice for a failed task action, so a failed save nearby can
+   never break the surrounding list layout. */
+.task-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 14px 12px 16px;
+  color: var(--priority-coral);
+  font-weight: 600;
+  background: var(--white);
+  border: 1px solid rgba(168, 63, 53, 0.35);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px rgba(20, 46, 54, 0.18);
+  transform: translateX(-50%);
+}
+
+.task-toast-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.task-toast-close:hover {
+  background: rgba(168, 63, 53, 0.1);
+}
+
 /* The steps block under the large container on the task detail page. */
 .task-steps {
   margin-top: 30px;
 }
 
+.task-steps-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
 .task-steps h2 {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -571,8 +843,9 @@ a {
 
 .agenda-step {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 22px 26px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
   padding: 14px 0;
   border-top: 1px solid var(--line);
 }
@@ -594,6 +867,53 @@ a {
   background: var(--action-teal);
   border-color: var(--action-teal);
   color: var(--white);
+}
+
+/* The numbered circle doubles as the check button that completes the task. */
+.agenda-check {
+  margin: 0 0 0 1px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  background: transparent;
+  cursor: pointer;
+}
+
+.agenda-check:hover {
+  border-color: var(--action-teal);
+}
+
+.agenda-check.is-done {
+  background: var(--action-teal);
+  border-color: var(--action-teal);
+  color: var(--white);
+}
+
+.agenda-check:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* The agenda handle sits in the list's leading column. */
+.agenda-handle {
+  width: 22px;
+  height: 24px;
+  margin-top: 0;
+}
+
+/* Sub-task rows keep the handle column empty so every row stays aligned. */
+.agenda-handle-space {
+  display: block;
+}
+
+.agenda-step.is-done .agenda-action {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.agenda-step .task-edit {
+  margin-top: -4px;
 }
 
 .agenda-action {
@@ -667,7 +987,10 @@ a {
 }
 
 .field input[type="text"],
+.field input[type="date"],
+.field input[type="number"],
 .field textarea,
+.field select,
 .field input[type="file"] {
   display: block;
   width: 100%;
@@ -753,6 +1076,96 @@ a {
   text-underline-offset: 3px;
 }
 
+/* ---------------------------------------------------- create-task dialog -- */
+
+.task-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  /* Tailwind's preflight zeroes dialog margins, which stops the modal from
+     centering; restore the browser's auto centering. */
+  margin: auto;
+  padding: 0;
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow-y: auto;
+}
+
+.task-dialog::backdrop {
+  background: rgba(20, 46, 54, 0.38);
+}
+
+.task-dialog-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px clamp(20px, 3vw, 28px) 16px;
+  background: var(--white);
+  border-bottom: 1px solid var(--line);
+}
+
+.task-dialog-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.task-dialog-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.task-dialog-close:hover {
+  background: rgba(12, 119, 109, 0.08);
+  border-color: var(--line);
+  color: var(--action-teal);
+}
+
+.task-dialog-body {
+  padding: 22px clamp(20px, 3vw, 28px) 26px;
+}
+
+.task-dialog-body .field {
+  margin-bottom: 18px;
+}
+
+.task-dialog-body .field textarea {
+  min-height: 92px;
+}
+
+.task-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.task-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+#_r_b_-minutes {
+  min-width: 10s0px;
+}
+
 /* ---------------------------------------------------------------- gmail -- */
 
 .page-nav {
@@ -820,18 +1233,21 @@ a {
   align-items: center;
   min-height: 46px;
   padding: 10px 20px;
+  background: transparent;
   color: var(--action-teal);
   font-weight: 600;
   text-decoration: none;
   border: 1px solid var(--action-teal);
   border-radius: var(--radius-md);
+  cursor: pointer;
 }
 
-.connect-button:hover:not(.disabled) {
+.connect-button:hover:not(.disabled):not(:disabled) {
   background: rgba(12, 119, 109, 0.07);
 }
 
-.connect-button.disabled {
+.connect-button.disabled,
+.connect-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1162,12 +1578,25 @@ a {
     padding: 28px 18px 64px;
   }
 
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-header-actions {
+    width: 100%;
+  }
+
   .choice-row {
     flex-direction: column;
   }
 
   .choice {
     width: 100%;
+  }
+
+  .task-form-row {
+    grid-template-columns: 1fr;
   }
 
   .submit-button,

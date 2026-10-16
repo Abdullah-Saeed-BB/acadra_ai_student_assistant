@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { TaskCard } from "@/components/task-card";
+import { TaskGroup } from "@/components/task-group";
+import { TaskCreateButton } from "@/components/task-create";
 import {
   backendUnavailableMessage,
   getTask,
@@ -49,6 +51,10 @@ export default async function TaskDetailPage({
       </div>
     );
   }
+
+  // Steps are one level deep and are shown inside their top-level task; they do
+  // not have a detail page of their own.
+  if (detail.parent_task_id) notFound();
 
   const { progress } = detail;
 
@@ -97,38 +103,30 @@ export default async function TaskDetailPage({
               </dd>
             </div>
           ) : null}
-          {detail.parent_task_id ? (
-            <div>
-              <dt>Parent</dt>
-              <dd>
-                <Link
-                  className="page-link"
-                  href={`/tasks/${detail.parent_task_id}`}
-                >
-                  Parent task
-                </Link>
-              </dd>
-            </div>
-          ) : null}
         </dl>
       </TaskCard>
 
       <section className="task-steps" aria-labelledby="task-steps-title">
-        <h2 id="task-steps-title">
-          {progress.total_steps > 0
-            ? `${progress.unfinished_steps} of ${progress.total_steps} steps remaining`
-            : "No steps yet"}
-        </h2>
+        <div className="task-steps-head">
+          <h2 id="task-steps-title">
+            {progress.total_steps > 0
+              ? `${progress.unfinished_steps} of ${progress.total_steps} steps remaining`
+              : "No steps yet"}
+          </h2>
+          <TaskCreateButton
+            label="Add step"
+            heading="New step"
+            submitLabel="Add step"
+            parentTaskId={detail.id}
+            defaultDay={detail.selected_day ?? ""}
+          />
+        </div>
         {detail.steps.length > 0 ? (
-          <div className="task-cards">
-            {detail.steps.map((step) => (
-              <TaskCard key={step.id} task={step} titleAs="h3" />
-            ))}
-          </div>
+          <TaskGroup tasks={detail.steps} titleAs="h3" allowStepReorder />
         ) : (
           <p className="panel-note">
-            This task has no steps. Split it into smaller steps to track progress
-            piece by piece.
+            This task has no steps yet. Add a step to break it into smaller
+            pieces you can track.
           </p>
         )}
       </section>

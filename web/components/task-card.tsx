@@ -1,6 +1,13 @@
+"use client";
+
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { DragEvent, ReactNode } from "react";
 import type { Task } from "@/lib/tasks";
+import {
+  TaskCheckButton,
+  TaskDragHandle,
+  TaskEditButton,
+} from "@/components/task-actions";
 
 function effortLabel(minutes: number | null): string {
   return `${minutes ?? 0} min`;
@@ -12,10 +19,27 @@ function statusLabel(status: Task["status"]): string {
   return "To do";
 }
 
+/** Drag wiring supplied by `useTaskReorder` for a reorderable container. */
+export type TaskCardDrag = {
+  handleProps: { onMouseDown: () => void };
+  itemProps: {
+    draggable: boolean;
+    onDragStart: (event: DragEvent<HTMLElement>) => void;
+    onDragEnd: (event: DragEvent<HTMLElement>) => void;
+    onDragOver: (event: DragEvent<HTMLElement>) => void;
+  };
+  dragging: boolean;
+  armed: boolean;
+};
+
 /**
  * A single task rendered as its own container, so each fact gets room to
  * breathe. Today uses the compact container with clamped details; the task
  * detail page uses the large container and renders the full review surface.
+ *
+ * Every container offers a check button to complete the task and a pencil
+ * button to edit it. Containers passed `drag` wiring also show the grip handle
+ * that reorders the task in its list.
  */
 export function TaskCard({
   task,
@@ -24,10 +48,12 @@ export function TaskCard({
   linkTitle = true,
   showDay = true,
   titleAs: Heading = "h2",
+  steps,
   children,
+  drag,
 }: {
   task: Task;
-  size?: "default" | "large";
+  size?: "default" | "large" | "nested";
   /** Clamp the details to this many lines. Omit to show the full text. */
   detailsLines?: number;
   /** Link the title to the task detail page. Disable on the detail page itself. */
@@ -35,14 +61,34 @@ export function TaskCard({
   /** Show the selected day. Turn off when every task shares the same day. */
   showDay?: boolean;
   titleAs?: "h2" | "h3";
+  /** Step tasks nested inside this task's container. */
+  steps?: Task[];
   /** Extra review facts (links, provenance) rendered inside the container. */
   children?: ReactNode;
+  /** Drag wiring for reorderable lists. Steps and detail views omit it. */
+  drag?: TaskCardDrag;
 }) {
+  // Steps live inside their top-level task and have no detail page, so they are
+  // never linked even when the surrounding list opts into linked titles.
+  const titleIsLink = linkTitle && !task.parent_task_id;
+
+  const sizeClass =
+    size === "large" ? " task-card-large" : size === "nested" ? " is-nested" : "";
+
   return (
-    <article className={`task-card${size === "large" ? " task-card-large" : ""}`}>
+    <article
+      className={`task-card${sizeClass}${task.status === "done" ? " is-done" : ""}${drag?.dragging ? " is-dragging" : ""}`}
+      {...(drag ? drag.itemProps : {})}>
       <div className="task-card-head">
+        {drag ? (
+          <TaskDragHandle
+            className={`task-drag-handle${drag.armed ? " is-armed" : ""}`}
+            handleProps={drag.handleProps}
+          />
+        ) : null}
+        <TaskCheckButton task={task} />
         <Heading className="task-card-title">
-          {linkTitle ? (
+          {titleIsLink ? (
             <Link className="page-link" href={`/tasks/${task.id}`}>
               {task.title}
             </Link>
@@ -51,6 +97,7 @@ export function TaskCard({
           )}
         </Heading>
         <span className="task-card-status">{statusLabel(task.status)}</span>
+        <TaskEditButton task={task} />
       </div>
 
       {task.details ? (
@@ -82,6 +129,21 @@ export function TaskCard({
       </dl>
 
       {children}
+
+      {steps && steps.length > 0 ? (
+        <div className="task-card-steps">
+          {steps.map((step) => (
+            <TaskCard
+              key={step.id}
+              task={step}
+              size="nested"
+              titleAs="h3"
+              detailsLines={detailsLines}
+              showDay={showDay}
+            />
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }

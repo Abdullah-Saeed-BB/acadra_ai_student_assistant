@@ -74,10 +74,60 @@ export type TaskDetail = Task & {
 
 export type TaskServiceError = Error & { status?: number };
 
-async function getJson<T>(path: string): Promise<T> {
+export type TaskCreateInput = {
+  title: string;
+  details?: string | null;
+  selected_day?: string | null;
+  estimated_minutes?: number | null;
+  tags?: string[];
+  academic_item_id?: string | null;
+  course_id?: string | null;
+  parent_task_id?: string | null;
+};
+
+export type TaskUpdateInput = {
+  title?: string;
+  details?: string | null;
+  status?: "todo" | "in_progress" | "done";
+  selected_day?: string | null;
+  clear_selected_day?: boolean;
+  list_position?: number;
+  estimated_minutes?: number | null;
+  tags?: string[];
+  parent_task_id?: string | null;
+  academic_item_id?: string | null;
+  clear_academic_item?: boolean;
+  course_id?: string | null;
+  clear_course?: boolean;
+};
+
+export type TaskDeleteResult = {
+  id: string;
+  title: string;
+  deleted_steps: number;
+  academic_item_id: string | null;
+  course_id: string | null;
+};
+
+function toServiceError(upstream: Response, data: unknown): TaskServiceError {
+  const message =
+    typeof data === "object" && data !== null && "error" in data
+      ? String((data as { error: unknown }).error)
+      : "Could not load tasks.";
+  const error = new Error(message) as TaskServiceError;
+  error.status = upstream.status;
+  return error;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const upstream = await fetch(`${BACKEND_URL}${path}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),
+    ...init,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
   });
   const payload = await upstream.text();
   let data: T;
@@ -87,15 +137,13 @@ async function getJson<T>(path: string): Promise<T> {
     throw new Error("The task service returned an invalid response.");
   }
   if (!upstream.ok) {
-    const message =
-      typeof data === "object" && data !== null && "error" in data
-        ? String((data as { error: unknown }).error)
-        : "Could not load tasks.";
-    const error = new Error(message) as TaskServiceError;
-    error.status = upstream.status;
-    throw error;
+    throw toServiceError(upstream, data);
   }
   return data;
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  return requestJson<T>(path);
 }
 
 export function getTodayPlan(): Promise<TodayPlan> {
@@ -116,6 +164,30 @@ export function listTasks(search: string): Promise<TaskPage> {
 
 export function getTask(taskId: string): Promise<TaskDetail> {
   return getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(taskId)}`);
+}
+
+export function createTask(input: TaskCreateInput): Promise<Task> {
+  return requestJson<Task>("/api/tasks", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateTask(
+  taskId: string,
+  input: TaskUpdateInput,
+): Promise<Task> {
+  return requestJson<Task>(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteTask(taskId: string): Promise<TaskDeleteResult> {
+  return requestJson<TaskDeleteResult>(
+    `/api/tasks/${encodeURIComponent(taskId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export function backendUnavailableMessage(): string {

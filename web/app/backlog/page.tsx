@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { TaskList } from "@/components/task-list";
+import { TaskCreateButton } from "@/components/task-create";
 import { backendUnavailableMessage, getBacklog } from "@/lib/tasks";
 
 export const metadata: Metadata = {
@@ -24,8 +25,9 @@ export default async function BacklogPage() {
     <div className="page">
       <PageHeader
         title="Backlog"
-        description="Unfinished tasks that have no selected day."
-      />
+        description="Unfinished tasks that have no selected day.">
+        <TaskCreateButton />
+      </PageHeader>
 
       {error ? (
         <section className="panel">
@@ -39,19 +41,12 @@ export default async function BacklogPage() {
           </div>
         </section>
       ) : tasks.length === 0 ? (
-        <section className="panel">
+        <section className="panel empty">
           <p className="panel-note">
             Backlog is empty. Unscheduled work lands here so you can pick a day
             for it later.
           </p>
-          <div className="page-actions">
-            <Link className="connect-button" href="/tasks/new">
-              New task
-            </Link>
-            <Link className="page-link" href="/sources/new">
-              Add a source
-            </Link>
-          </div>
+          <div className="page-actions"></div>
         </section>
       ) : (
         <section className="panel" aria-labelledby="backlog-list">
