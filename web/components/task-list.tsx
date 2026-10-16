@@ -5,6 +5,7 @@ import type { Task } from "@/lib/tasks";
 import {
   TaskActionNotice,
   TaskCheckButton,
+  TaskDeleteButton,
   TaskDragHandle,
   TaskEditButton,
 } from "@/components/task-actions";
@@ -22,9 +23,11 @@ function statusLabel(status: Task["status"]): string {
 
 /**
  * Shared agenda-style task list. Every row offers a check button to complete
- * the task and a pencil button to edit it. Only true top-level tasks get the
- * grip handle that reorders the list; sub-tasks stay in place here (they are
- * reordered on their parent's task detail page instead).
+ * the task, a pencil button to edit it, and a trash button that deletes it
+ * behind a confirm dialog listing any steps the deletion would take. Only
+ * true top-level tasks get the grip handle that reorders the list; sub-tasks
+ * stay in place here (they are reordered on their parent's task detail page
+ * instead).
  */
 export function TaskList({ tasks }: { tasks: Task[] }) {
   const reorder = useTaskReorder(
@@ -88,6 +91,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                 ) : null}
               </div>
               <TaskEditButton task={task} />
+              <TaskDeleteButton task={task} />
             </li>
           );
         })}

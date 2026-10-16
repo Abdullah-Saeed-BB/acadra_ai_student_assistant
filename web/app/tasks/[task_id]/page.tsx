@@ -65,46 +65,7 @@ export default async function TaskDetailPage({
         description="The full task, with everything linked to it and any steps you have split out."
       />
 
-      <TaskCard task={detail} size="large" linkTitle={false}>
-        <dl className="task-card-meta">
-          <div>
-            <dt>Academic item</dt>
-            <dd>
-              {detail.academic_item ? (
-                <Link
-                  className="page-link"
-                  href={`/items/${detail.academic_item.id}`}
-                >
-                  {detail.academic_item.title}
-                </Link>
-              ) : (
-                "None linked"
-              )}
-            </dd>
-          </div>
-          {detail.academic_item?.item_type ? (
-            <div>
-              <dt>Type</dt>
-              <dd>{detail.academic_item.item_type}</dd>
-            </div>
-          ) : null}
-          {detail.academic_item?.due_at ? (
-            <div>
-              <dt>Due</dt>
-              <dd className="tnum">{detail.academic_item.due_at}</dd>
-            </div>
-          ) : null}
-          {detail.course ? (
-            <div>
-              <dt>Course</dt>
-              <dd>
-                {detail.course.code ? `${detail.course.code} · ` : ""}
-                {detail.course.name}
-              </dd>
-            </div>
-          ) : null}
-        </dl>
-      </TaskCard>
+      <TaskCard task={detail} size="large" linkTitle={false} />
 
       <section className="task-steps" aria-labelledby="task-steps-title">
         <div className="task-steps-head">

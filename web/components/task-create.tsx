@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { loadTaskOptions, type TaskOptions } from "@/lib/task-options";
 
 type NewTask = {
   title: string;
@@ -11,25 +12,6 @@ type NewTask = {
   tags: string;
   academicItemId: string;
   courseId: string;
-};
-
-type AcademicItemOption = {
-  id: string;
-  title: string;
-  item_type: string;
-  due_at: string | null;
-};
-
-type CourseOption = {
-  id: string;
-  code: string | null;
-  name: string;
-  term: string | null;
-};
-
-type TaskOptions = {
-  academic_items: AcademicItemOption[];
-  courses: CourseOption[];
 };
 
 function emptyForm(defaultDay: string): NewTask {
@@ -102,21 +84,7 @@ export function TaskCreateButton({
     setOptionsLoading(true);
     setOptionsError(null);
     try {
-      const response = await fetch("/api/task-options", { cache: "no-store" });
-      const data = (await response.json()) as {
-        academic_items?: AcademicItemOption[];
-        courses?: CourseOption[];
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Could not load academic items and courses.",
-        );
-      }
-      setOptions({
-        academic_items: data.academic_items ?? [],
-        courses: data.courses ?? [],
-      });
+      setOptions(await loadTaskOptions());
     } catch (cause) {
       setOptionsError(
         cause instanceof Error
@@ -311,7 +279,7 @@ export function TaskCreateButton({
             </div>
           </div>
 
-          {/* <div className="task-form-row">
+          <div className="task-form-row">
             <div className="field">
               <label htmlFor={`${titleId}-item`}>
                 Academic item <span className="optional">optional</span>
@@ -358,9 +326,9 @@ export function TaskCreateButton({
           ) : null}
           {optionsError ? (
             <p className="field-hint" role="alert">
-              AAA{optionsError}
+              {optionsError}
             </p>
-          ) : null} */}
+          ) : null}
 
           <div className="field">
             <label htmlFor={`${titleId}-tags`}>

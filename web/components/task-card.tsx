@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
-import type { Task } from "@/lib/tasks";
+import type { Task, TaskDetail } from "@/lib/tasks";
+import { loadTaskOptions } from "@/lib/task-options";
+import type { TaskOptions } from "@/lib/task-options";
 import {
   TaskCheckButton,
+  TaskDeleteButton,
   TaskDragHandle,
   TaskEditButton,
 } from "@/components/task-actions";
@@ -17,6 +21,25 @@ function statusLabel(status: Task["status"]): string {
   if (status === "done") return "Done";
   if (status === "in_progress") return "In progress";
   return "To do";
+}
+
+let optionsCache: TaskOptions | null = null;
+let optionsPromise: Promise<TaskOptions> | null = null;
+
+function getTaskOptionsCached(): Promise<TaskOptions> {
+  if (optionsCache) return Promise.resolve(optionsCache);
+  if (!optionsPromise) {
+    optionsPromise = loadTaskOptions()
+      .then((opts) => {
+        optionsCache = opts;
+        return opts;
+      })
+      .catch((err) => {
+        optionsPromise = null;
+        throw err;
+      });
+  }
+  return optionsPromise;
 }
 
 /** Drag wiring supplied by `useTaskReorder` for a reorderable container. */
@@ -37,9 +60,10 @@ export type TaskCardDrag = {
  * breathe. Today uses the compact container with clamped details; the task
  * detail page uses the large container and renders the full review surface.
  *
- * Every container offers a check button to complete the task and a pencil
- * button to edit it. Containers passed `drag` wiring also show the grip handle
- * that reorders the task in its list.
+ * Every container offers a check button to complete the task, a pencil
+ * button to edit it, and a trash button that deletes it behind a confirm
+ * dialog listing any steps the deletion would take. Containers passed `drag`
+ * wiring also show the grip handle that reorders the task in its list.
  */
 export function TaskCard({
   task,
@@ -72,6 +96,56 @@ export function TaskCard({
   // never linked even when the surrounding list opts into linked titles.
   const titleIsLink = linkTitle && !task.parent_task_id;
 
+  const [options, setOptions] = useState<TaskOptions | null>(optionsCache);
+  useEffect(() => {
+    let active = true;
+    if (optionsCache) {
+      setOptions(optionsCache);
+      return () => {
+        active = false;
+      };
+    }
+    getTaskOptionsCached()
+      .then((opts) => {
+        if (active) setOptions(opts);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const detailTask = task as unknown as TaskDetail;
+  const resolvedAcademic =
+    detailTask.academic_item ??
+    (task.academic_item_id && options
+      ? (() => {
+          const found = options.academic_items.find(
+            (item) => item.id === task.academic_item_id,
+          );
+          return found
+            ? {
+                id: found.id,
+                title: found.title,
+                item_type: found.item_type,
+                due_at: found.due_at,
+              }
+            : null;
+        })()
+      : null);
+  const resolvedCourse =
+    detailTask.course ??
+    (task.course_id && options
+      ? (() => {
+          const found = options.courses.find(
+            (course) => course.id === task.course_id,
+          );
+          return found
+            ? { id: found.id, code: found.code, name: found.name }
+            : null;
+        })()
+      : null);
+
   const sizeClass =
     size === "large" ? " task-card-large" : size === "nested" ? " is-nested" : "";
 
@@ -96,8 +170,9 @@ export function TaskCard({
             task.title
           )}
         </Heading>
-        <span className="task-card-status">{statusLabel(task.status)}</span>
+        <span className={`task-card-status task-card-status-${task.status === "done" ? "done" : "todo"}`}>{statusLabel(task.status)}</span>
         <TaskEditButton task={task} />
+        <TaskDeleteButton task={task} />
       </div>
 
       {task.details ? (
@@ -124,6 +199,39 @@ export function TaskCard({
           <div>
             <dt>Tags</dt>
             <dd>{task.tags.join(", ")}</dd>
+          </div>
+        ) : null}
+        {resolvedAcademic ? (
+          <>
+            <div>
+              <dt>Academic item</dt>
+              <dd>
+                <Link className="page-link" href={`/items/${resolvedAcademic.id}`}>
+                  {resolvedAcademic.title}
+                </Link>
+              </dd>
+            </div>
+            {resolvedAcademic.item_type ? (
+              <div>
+                <dt>Type</dt>
+                <dd>{resolvedAcademic.item_type}</dd>
+              </div>
+            ) : null}
+            {resolvedAcademic.due_at ? (
+              <div>
+                <dt>Due</dt>
+                <dd className="tnum">{resolvedAcademic.due_at}</dd>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {resolvedCourse ? (
+          <div>
+            <dt>Course</dt>
+            <dd>
+              {resolvedCourse.code ? `${resolvedCourse.code} · ` : ""}
+              {resolvedCourse.name}
+            </dd>
           </div>
         ) : null}
       </dl>

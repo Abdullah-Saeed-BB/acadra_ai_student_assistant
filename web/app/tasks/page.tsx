@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { TaskList } from "@/components/task-list";
+import { TaskGroup } from "@/components/task-group";
 import { TaskCreateButton } from "@/components/task-create";
 import { backendUnavailableMessage, listTasks } from "@/lib/tasks";
 
@@ -69,7 +69,7 @@ export default async function TasksPage({
             {query.tag ? ` · tag “${query.tag}”` : ""}
             {page?.has_more ? " · showing the first page" : ""}
           </p>
-          <TaskList tasks={tasks} />
+          <TaskGroup tasks={tasks} />
         </section>
       )}
     </div>
