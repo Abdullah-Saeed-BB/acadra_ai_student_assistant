@@ -8,17 +8,36 @@ import type { ReactNode } from "react";
 export function PageHeader({
   title,
   description,
+  tooltip,
   children,
 }: {
   title: string;
   description?: string;
+  tooltip?: string;
   children?: ReactNode;
 }) {
   return (
     <header className="page-header">
       <div className="page-header-text">
         <h1 className="page-title display-accent">{title}</h1>
-        {description ? <p className="page-lede">{description}</p> : null}
+        {description || tooltip ? (
+          <p className="page-lede">
+            {description}
+            {description && tooltip ? " " : null}
+            {tooltip ? (
+              <span
+                className="help-icon"
+                tabIndex={0}
+                role="button"
+                aria-label={tooltip}>
+                ?
+                <span className="help-tooltip" role="tooltip">
+                  {tooltip}
+                </span>
+              </span>
+            ) : null}
+          </p>
+        ) : null}
       </div>
       {children ? <div className="page-header-actions">{children}</div> : null}
     </header>

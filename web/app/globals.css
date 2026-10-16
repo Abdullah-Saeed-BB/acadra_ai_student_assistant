@@ -367,6 +367,57 @@ a {
   line-height: 1.6;
 }
 
+.help-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.help-icon:hover,
+.help-icon:focus {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.help-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: 260px;
+  max-width: 80vw;
+  padding: 8px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.4;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 10;
+  text-align: left;
+  font-weight: 400;
+}
+
+.help-icon:hover .help-tooltip,
+.help-icon:focus .help-tooltip,
+.help-icon:focus-within .help-tooltip {
+  opacity: 1;
+}
+
 .display-accent {
   font-family: var(--font-display);
   font-weight: 600;

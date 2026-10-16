@@ -85,7 +85,8 @@ export default async function InboxPage() {
     <div className="page">
       <PageHeader
         title="Inbox"
-        description="Recent academic records and the changes recorded against them.">
+        description="Recent academic records and the changes recorded against them."
+        tooltip="An academic item is a tracked fact from a source — an assignment, announcement, reading, or event — with its course, dates, review state, and the source evidence behind it. The inbox lists these records and the changes recorded against them.">
         <Link className="connect-button" href="/courses">
           Manage courses
         </Link>
