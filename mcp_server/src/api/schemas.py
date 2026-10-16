@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -99,6 +99,69 @@ class AcademicItemResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AcademicItemCreateRequest(BaseModel):
+    """Fields accepted when a student records an academic item by hand."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_type: Literal["assignment", "announcement", "reading", "event"]
+    title: str = Field(min_length=1, max_length=200)
+    details: str | None = Field(default=None, max_length=4000)
+    course_id: UUID | None = None
+    starts_at: AwareDatetime | None = None
+    due_at: AwareDatetime | None = None
+    grade_weight_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    late_penalty: str | None = Field(default=None, max_length=200)
+
+
+class AcademicItemUpdateRequest(BaseModel):
+    """Partial academic item update.
+
+    Nullable fields are cleared with their ``clear_*`` flags because ``null``
+    means "leave unchanged". An edit marks the item verified unless
+    ``review_state`` is set.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_type: Literal["assignment", "announcement", "reading", "event"] | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    details: str | None = Field(default=None, max_length=4000)
+    clear_details: bool = False
+    course_id: UUID | None = None
+    clear_course: bool = False
+    starts_at: AwareDatetime | None = None
+    clear_starts_at: bool = False
+    due_at: AwareDatetime | None = None
+    clear_due_at: bool = False
+    grade_weight_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    clear_grade_weight: bool = False
+    late_penalty: str | None = Field(default=None, max_length=200)
+    clear_late_penalty: bool = False
+    review_state: Literal["verified", "uncertain", "conflicting"] | None = None
+
+
+class AcademicItemDeleteResponse(BaseModel):
+    """Confirmation for a removed academic item and the links it held."""
+
+    id: UUID
+    title: str
+    course_id: UUID | None
+    unlinked_tasks: int
+    removed_source_links: int
+
+
+class AcademicItemCourseResponse(BaseModel):
+    id: UUID
+    code: str | None
+    name: str
+    term: str | None
+
+
+class AcademicItemDetailResponse(AcademicItemResponse):
+    course: AcademicItemCourseResponse | None
 
 
 class AcademicItemEvidenceResponse(BaseModel):
@@ -349,6 +412,91 @@ class CourseResponse(BaseModel):
 
 class CourseListResponse(BaseModel):
     items: list[CourseResponse]
+    limit: int
+    offset: int
+    has_more: bool
+    next_offset: int | None
+
+
+class CourseCreateRequest(BaseModel):
+    """Fields accepted when a student registers a course."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    code: str | None = Field(default=None, max_length=50)
+    term: str | None = Field(default=None, max_length=100)
+
+
+class CourseUpdateRequest(BaseModel):
+    """Partial course update; nullable fields clear with their flags."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    code: str | None = Field(default=None, max_length=50)
+    clear_code: bool = False
+    term: str | None = Field(default=None, max_length=100)
+    clear_term: bool = False
+
+
+class CourseDeleteResponse(BaseModel):
+    """Confirmation for a removed course, including what it unlinked."""
+
+    id: UUID
+    name: str
+    unlinked_items: int
+    unlinked_tasks: int
+
+
+class CourseItemSummaryResponse(BaseModel):
+    id: UUID
+    title: str
+    item_type: str
+    review_state: str
+    due_at: datetime | None
+    grade_weight_percent: Decimal | None
+
+
+class CourseDetailResponse(BaseModel):
+    id: UUID
+    code: str | None
+    name: str
+    term: str | None
+    created_at: datetime
+    academic_items: list[CourseItemSummaryResponse]
+
+
+class ChangeListQuery(BaseModel):
+    """Bounded filters for the academic change feed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    since: AwareDatetime | None = None
+    item_type: Literal["assignment", "announcement", "reading", "event"] | None = None
+    course_id: UUID | None = None
+    change_kind: Literal["created", "edited"] | None = None
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
+class ChangeResponse(BaseModel):
+    id: UUID
+    academic_item_id: UUID
+    source_revision_id: UUID | None
+    origin: str
+    change_kind: Literal["created", "edited"]
+    before_values: dict[str, Any] | None
+    after_values: dict[str, Any]
+    recorded_at: datetime
+    title: str | None
+    item_type: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChangeListResponse(BaseModel):
+    items: list[ChangeResponse]
     limit: int
     offset: int
     has_more: bool

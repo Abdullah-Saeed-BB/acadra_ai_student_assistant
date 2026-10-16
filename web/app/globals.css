@@ -419,6 +419,7 @@ a {
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
+  margin-bottom: 20px;
 }
 
 .panel-note {
@@ -509,6 +510,16 @@ a {
   white-space: nowrap;
   border: 1px solid var(--line);
   border-radius: 999px;
+}
+
+.task-card-status--todo {
+  color: var(--signal-amber);
+  border-color: var(--signal-amber);
+}
+
+.task-card-status--done {
+  color: var(--action-teal);
+  border-color: var(--action-teal);
 }
 
 .task-card-details {
@@ -618,8 +629,8 @@ a {
 
 /* -------------------------------------------------------- task actions -- */
 
-/* The drag handle, check circle, and edit button every task row carries. The
-   handle stays out of the way until the mouse is near the task. */
+/* The drag handle, check circle, edit button, and delete button every task
+   row carries. The handle stays out of the way until the mouse is near the task. */
 .task-drag-handle {
   flex: none;
   display: inline-flex;
@@ -711,7 +722,8 @@ a {
   cursor: wait;
 }
 
-.task-edit {
+.task-edit,
+.task-delete {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -731,6 +743,14 @@ a {
   color: var(--action-teal);
   background: rgba(12, 119, 109, 0.08);
   border-color: var(--line);
+}
+
+/* The delete button carries the app's danger signal on hover; the button's
+   accessible label names the action for everyone else. */
+.task-delete:hover {
+  color: var(--priority-coral);
+  background: rgba(150, 53, 44, 0.08);
+  border-color: rgba(150, 53, 44, 0.35);
 }
 
 /* The task being dragged keeps its place but fades until it is dropped. */
@@ -843,7 +863,8 @@ a {
 
 .agenda-step {
   display: grid;
-  grid-template-columns: 22px 26px minmax(0, 1fr) auto;
+  /* Handle, check circle, content, then the edit and delete buttons. */
+  grid-template-columns: 22px 26px minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: start;
   padding: 14px 0;
@@ -912,7 +933,8 @@ a {
   text-decoration: line-through;
 }
 
-.agenda-step .task-edit {
+.agenda-step .task-edit,
+.agenda-step .task-delete {
   margin-top: -4px;
 }
 
@@ -1159,6 +1181,43 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  margin-top: 4px;
+}
+
+/* The delete confirm's cascade warning: it names every step the deletion
+   takes with the task, so the list reads in the same ink as the app. */
+.task-delete-cascade {
+  margin: 0 0 18px;
+  padding: 13px 15px;
+  background: rgba(168, 63, 53, 0.08);
+  border: 1px solid rgba(168, 63, 53, 0.35);
+  border-radius: var(--radius-md);
+  color: var(--priority-coral);
+  line-height: 1.5;
+}
+
+.task-delete-cascade p {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Tailwind's preflight zeroes list styling, so the step titles need their
+   disc and rhythm restored. Long step lists scroll inside the dialog. */
+.task-delete-steps {
+  margin: 10px 0 0;
+  padding: 10px 14px 10px 32px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--white);
+  border: 1px solid rgba(168, 63, 53, 0.28);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.5;
+  list-style: disc outside;
+}
+
+.task-delete-steps li + li {
   margin-top: 4px;
 }
 
@@ -1508,6 +1567,360 @@ a {
   }
 }
 
+/* -------------------------------------------------------------- courses -- */
+
+.course-board {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.course-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.course-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.course-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.course-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.course-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.course-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.course-empty {
+  margin: 0;
+}
+
+/* Items grouped inside a course: fine rules, generous row spacing. */
+.item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.item-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.item-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  min-width: 0;
+}
+
+.item-type {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.item-title {
+  font-weight: 700;
+}
+
+.item-due {
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.item-row-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.review-pill {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.review-pill.is-verified {
+  color: var(--action-teal);
+  border-color: rgba(10, 102, 94, 0.4);
+  background: rgba(10, 102, 94, 0.08);
+}
+
+.review-pill.is-uncertain {
+  color: var(--signal-amber);
+  border-color: rgba(158, 108, 17, 0.4);
+  background: rgba(158, 108, 17, 0.09);
+}
+
+.review-pill.is-conflicting {
+  color: var(--priority-coral);
+  border-color: rgba(150, 53, 44, 0.4);
+  background: rgba(150, 53, 44, 0.08);
+}
+
+.icon-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  color: var(--action-teal);
+  background: rgba(12, 119, 109, 0.08);
+  border-color: var(--line);
+}
+
+.icon-button.is-danger:hover {
+  color: var(--priority-coral);
+  background: rgba(150, 53, 44, 0.08);
+  border-color: rgba(150, 53, 44, 0.35);
+}
+
+.connect-button-small {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: var(--text-label);
+  cursor: pointer;
+}
+
+.submit-button.is-danger {
+  background: var(--priority-coral);
+}
+
+.submit-button.is-danger:hover:not(:disabled) {
+  background: #7f2c25;
+}
+
+.task-dialog-compact {
+  width: min(440px, calc(100vw - 32px));
+}
+
+/* --------------------------------------------------------- item detail -- */
+
+.detail-title {
+  margin: 0 0 18px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.detail-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 40px;
+  margin: 0;
+  padding-top: 4px;
+}
+
+.detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detail-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detail-grid dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.detail-details {
+  max-width: 68ch;
+  margin: 20px 0 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detail-ref {
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.evidence-list {
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.evidence-list li {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.evidence-field {
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.evidence-excerpt {
+  line-height: 1.6;
+}
+
+.evidence-reasons {
+  margin-top: 22px;
+}
+
+.evidence-reasons h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.evidence-reasons ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- inbox -- */
+
+.change-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.change-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.change-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.change-head .page-link {
+  font-weight: 700;
+}
+
+.change-badge {
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  border-radius: 999px;
+  background: rgba(67, 88, 94, 0.12);
+  color: var(--muted);
+}
+
+.change-badge.is-created {
+  background: rgba(10, 102, 94, 0.12);
+  color: var(--action-teal);
+}
+
+.change-origin {
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-transform: capitalize;
+}
+
+.change-date {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.change-diff {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.change-diff li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.change-field {
+  min-width: 120px;
+  color: var(--ink);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.change-before {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.change-arrow {
+  color: var(--muted);
+}
+
+.change-after {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------ responsive -- */
 
 @media (max-width: 900px) {
@@ -1599,6 +2012,18 @@ a {
     grid-template-columns: 1fr;
   }
 
+  /* The card head now carries a delete button beside the pencil, which is
+     more fixed width than a narrow card can hold in one line. Let it wrap so
+     the title keeps a readable line and the status pill and row buttons
+     follow below it instead of squeezing the title to nothing. */
+  .task-card-head {
+    flex-wrap: wrap;
+  }
+
+  .task-card-title {
+    flex: 1 1 60%;
+  }
+
   .submit-button,
   .connect-button {
     width: 100%;
@@ -1613,6 +2038,16 @@ a {
   .gmail-actions > * {
     width: 100%;
     justify-content: center;
+  }
+
+  .course-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .evidence-list li {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .chat-message {

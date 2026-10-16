@@ -16,8 +16,22 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 from src.api.openapi import build_openapi_spec
-from src.api.routes.academic_items import get_academic_items, get_item_evidence
-from src.api.routes.courses import get_courses
+from src.api.routes.academic_items import (
+    create_academic_item_route,
+    delete_academic_item_route,
+    get_academic_item_route,
+    get_academic_items,
+    get_item_evidence,
+    update_academic_item_route,
+)
+from src.api.routes.changes import get_changes
+from src.api.routes.courses import (
+    create_course_route,
+    delete_course_route,
+    get_course_route,
+    get_courses,
+    update_course_route,
+)
 from src.api.routes.gmail import authorize_gmail, get_gmail_configuration, gmail_callback, put_gmail_configuration
 from src.api.routes.manual_text import add_manual_file, add_manual_text, get_source_candidates
 from src.api.routes.tasks import (
@@ -86,8 +100,17 @@ app.add_route("/api/sources/files", add_manual_file, methods=["POST"])
 app.add_route("/api/sources/{source_document_id}/candidates", get_source_candidates, methods=["GET"])
 app.add_route("/api/sources/text/{source_document_id}/candidates", get_source_candidates, methods=["GET"])
 app.add_route("/api/academic-items", get_academic_items, methods=["GET"])
+app.add_route("/api/academic-items", create_academic_item_route, methods=["POST"])
+app.add_route("/api/academic-items/{item_id}", get_academic_item_route, methods=["GET"])
+app.add_route("/api/academic-items/{item_id}", update_academic_item_route, methods=["PATCH"])
+app.add_route("/api/academic-items/{item_id}", delete_academic_item_route, methods=["DELETE"])
 app.add_route("/api/academic-items/{item_id}/evidence", get_item_evidence, methods=["GET"])
+app.add_route("/api/changes", get_changes, methods=["GET"])
 app.add_route("/api/courses", get_courses, methods=["GET"])
+app.add_route("/api/courses", create_course_route, methods=["POST"])
+app.add_route("/api/courses/{course_id}", get_course_route, methods=["GET"])
+app.add_route("/api/courses/{course_id}", update_course_route, methods=["PATCH"])
+app.add_route("/api/courses/{course_id}", delete_course_route, methods=["DELETE"])
 app.add_route("/api/tasks", list_tasks_route, methods=["GET"])
 app.add_route("/api/tasks", create_task_route, methods=["POST"])
 app.add_route("/api/tasks/reorder", reorder_tasks_route, methods=["POST"])
