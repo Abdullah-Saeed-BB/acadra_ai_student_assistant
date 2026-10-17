@@ -101,7 +101,7 @@ async def authorize_gmail(request: Request):
 
 def _web_redirect(result: str) -> RedirectResponse:
     web_url = os.getenv("ACADRA_WEB_URL", DEFAULT_WEB_URL).rstrip("/")
-    response = RedirectResponse(f"{web_url}/gmail?{urlencode({'connection': result})}", status_code=303)
+    response = RedirectResponse(f"{web_url}/connecters/gmail?{urlencode({'connection': result})}", status_code=303)
     response.delete_cookie(STATE_COOKIE)
     return response
 
