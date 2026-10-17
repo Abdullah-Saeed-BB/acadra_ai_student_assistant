@@ -21,9 +21,9 @@ export function PlannedView({
 
       <section className="panel">
         <p className="panel-note">
-          This page is scaffolded so navigation works end to end. When its backend route is
-          ready it will read and write through the REST boundary, the same way manual source
-          entry does today.
+          This page is scaffolded so navigation works end to end. When its
+          backend route is ready it will read and write through the REST
+          boundary, the same way manual source entry does today.
         </p>
         {note ? <p className="panel-note">{note}</p> : null}
         <div className="page-actions">

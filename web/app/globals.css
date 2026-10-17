@@ -2170,3 +2170,18 @@ a {
   line-height: 1.55;
   font-size: 14px;
 }
+
+.connector-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.connector-card-icon {
+  flex-shrink: 0;
+}
+
+.connector-card-status--connected {
+  background: #dcfce7;
+  color: #15803d;
+}
