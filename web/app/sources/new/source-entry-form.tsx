@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useRef, useState } from "react";
 
@@ -9,6 +9,21 @@ type SaveResult = {
   processing_status: string;
   academic_item_ids: string[];
   review_count: number;
+};
+
+type PendingSource = {
+  id: string;
+  mode: EntryMode;
+  title: string;
+  text?: string;
+  file?: File;
+};
+
+type ProcessingResult = {
+  id: string;
+  title: string;
+  ok: boolean;
+  message: string;
 };
 
 const MAX_TEXT_BYTES = 64 * 1024;
@@ -30,6 +45,12 @@ function fileError(file: File): string | null {
   return null;
 }
 
+function sourceLabel(source: PendingSource): string {
+  if (source.title) return source.title;
+  if (source.mode === "file" && source.file) return source.file.name;
+  return "Pasted text";
+}
+
 export function SourceEntryForm() {
   const [mode, setMode] = useState<EntryMode>("text");
   const [title, setTitle] = useState("");
@@ -37,19 +58,17 @@ export function SourceEntryForm() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<SaveResult | null>(null);
+  const [pending, setPending] = useState<PendingSource[]>([]);
+  const [results, setResults] = useState<ProcessingResult[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   function changeMode(next: EntryMode) {
     setMode(next);
     setError(null);
-    setResult(null);
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function addSource() {
     setError(null);
-    setResult(null);
 
     const cleanTitle = title.trim();
     if (title && !cleanTitle) {
@@ -58,7 +77,7 @@ export function SourceEntryForm() {
     }
     if (mode === "text") {
       if (!text.trim()) {
-        setError("Paste or type some text before saving.");
+        setError("Paste or type some text before adding.");
         return;
       }
       if (new TextEncoder().encode(text).length > MAX_TEXT_BYTES) {
@@ -67,7 +86,7 @@ export function SourceEntryForm() {
       }
     } else {
       if (!file) {
-        setError("Choose a file before saving.");
+        setError("Choose a file before adding.");
         return;
       }
       const validation = fileError(file);
@@ -77,16 +96,38 @@ export function SourceEntryForm() {
       }
     }
 
-    setBusy(true);
+    const source: PendingSource = {
+      id: (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
+      mode,
+      title: cleanTitle,
+      text: mode === "text" ? text : undefined,
+      file: mode === "file" ? file! : undefined,
+    };
+    setPending((prev) => [...prev, source]);
+    setTitle("");
+    setText("");
+    setFile(null);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  function removeSource(id: string) {
+    setPending((prev) => prev.filter((source) => source.id !== id));
+  }
+
+  async function submitSource(source: PendingSource): Promise<ProcessingResult> {
+    const label = sourceLabel(source);
     try {
       const options: RequestInit = { method: "POST" };
-      if (mode === "text") {
+      if (source.mode === "text") {
         options.headers = { "Content-Type": "application/json" };
-        options.body = JSON.stringify({ text, ...(cleanTitle && { title: cleanTitle }) });
+        options.body = JSON.stringify({
+          text: source.text,
+          ...(source.title && { title: source.title }),
+        });
       } else {
         const body = new FormData();
-        body.append("file", file!);
-        if (cleanTitle) body.append("title", cleanTitle);
+        body.append("file", source.file!);
+        if (source.title) body.append("title", source.title);
         options.body = body;
       }
 
@@ -96,29 +137,52 @@ export function SourceEntryForm() {
       if (!response.ok) {
         throw new Error(data.details?.[0]?.message || data.error || "The source could not be saved.");
       }
-      setResult(data);
-      setTitle("");
-      setText("");
-      setFile(null);
-      if (fileInput.current) fileInput.current.value = "";
+      return {
+        id: source.id,
+        title: label,
+        ok: true,
+        message: `Revision ${data.revision_no} - ${data.academic_item_ids.length} academic ${data.academic_item_ids.length === 1 ? "item" : "items"} found - ${data.review_count} to review${data.processing_status === "pending_configuration" ? " (automatic extraction not configured)" : data.processing_status === "failed" ? " (extraction failed)" : ""}`,
+      };
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The source could not be saved. Try again.");
-    } finally {
-      setBusy(false);
+      return {
+        id: source.id,
+        title: label,
+        ok: false,
+        message: cause instanceof Error ? cause.message : "The source could not be saved. Try again.",
+      };
     }
   }
 
+  async function startProcessing(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (busy || pending.length === 0) return;
+
+    setBusy(true);
+    setError(null);
+    setResults([]);
+    const batch = pending;
+    setPending([]);
+
+    const collected: ProcessingResult[] = [];
+    for (const source of batch) {
+      const result = await submitSource(source);
+      collected.push(result);
+      setResults([...collected]);
+    }
+    setBusy(false);
+  }
+
   return (
-    <form className="entry-form" onSubmit={submit}>
+    <form className="entry-form" onSubmit={startProcessing}>
       <fieldset className="source-choice" disabled={busy}>
         <legend>Source type</legend>
         <div className="choice-row">
           <label className={mode === "text" ? "choice active" : "choice"}>
-            <input type="radio" name="source-type" value="text" checked={mode === "text"} onChange={() => changeMode("text")} />
+            <input type="radio" name="source-type" value="text" checked={mode === "text"} onChange={() => changeMode("text")} disabled={busy} />
             Text
           </label>
           <label className={mode === "file" ? "choice active" : "choice"}>
-            <input type="radio" name="source-type" value="file" checked={mode === "file"} onChange={() => changeMode("file")} />
+            <input type="radio" name="source-type" value="file" checked={mode === "file"} onChange={() => changeMode("file")} disabled={busy} />
             HTML or PDF file
           </label>
         </div>
@@ -133,7 +197,7 @@ export function SourceEntryForm() {
       {mode === "text" ? (
         <div className="field">
           <label htmlFor="source-text">Text</label>
-          <textarea id="source-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an announcement, assignment, or course note here…" rows={11} disabled={busy} />
+          <textarea id="source-text" value={text} onChange={(event) => setText(event.target.value)} placeholder="Paste an announcement, assignment, or course note here..." rows={11} disabled={busy} />
           <p className="field-hint">Up to 64 KiB of text.</p>
         </div>
       ) : (
@@ -145,18 +209,47 @@ export function SourceEntryForm() {
       )}
 
       {error && <p className="message error" role="alert">{error}</p>}
-      {result && (
-        <div className="message success" role="status">
-          <strong>Source saved.</strong>
-          <span>Revision {result.revision_no} · {result.academic_item_ids.length} academic {result.academic_item_ids.length === 1 ? "item" : "items"} found · {result.review_count} to review</span>
-          {result.processing_status === "pending_configuration" && <span>Automatic extraction is not configured yet.</span>}
-          {result.processing_status === "failed" && <span>Automatic extraction failed. The source was still saved.</span>}
+
+      <div className="choice-row" style={{ marginBottom: 22 }}>
+        <button type="button" className="submit-button" onClick={addSource} disabled={busy}>
+          Add
+        </button>
+      </div>
+
+      {pending.length > 0 && (
+        <div className="message" role="status" style={{ background: "rgba(12,119,109,0.05)", border: "1px solid var(--line)" }}>
+          <strong>{pending.length} source{pending.length === 1 ? "" : "s"} ready to process</strong>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+            {pending.map((source) => (
+              <li key={source.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>{sourceLabel(source)} <span style={{ color: "var(--muted)" }}>({source.mode === "file" ? "file" : "text"})</span></span>
+                <button type="button" aria-label="Remove source" onClick={() => removeSource(source.id)} disabled={busy} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--priority-coral)", cursor: "pointer", fontWeight: 700, fontSize: 18, lineHeight: 1 }}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      <button className="submit-button" type="submit" disabled={busy}>
-        {busy ? "Saving source…" : "Save source"}
+      {results.length > 0 && (
+        <div className="message success" role="status">
+          <strong>Processing results</strong>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+            {results.map((item) => (
+              <li key={item.id}>
+                <strong>{item.title}:</strong> {item.ok ? "saved" : "failed"} - {item.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <button className="submit-button" type="submit" disabled={busy || pending.length === 0}>
+        {busy ? "Processing..." : "Start Processing"}
       </button>
     </form>
   );
 }
+
+

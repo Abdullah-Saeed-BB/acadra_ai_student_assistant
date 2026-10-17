@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       headers: { "Content-Type": contentType },
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(600_000),
     });
     const payload = await upstream.text();
     try {

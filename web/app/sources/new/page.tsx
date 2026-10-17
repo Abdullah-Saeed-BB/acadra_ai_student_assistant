@@ -12,11 +12,9 @@ export default function AddSourcePage() {
     <div className="page">
       <PageHeader
         title="Add a source"
-        description="Enter information for your study workspace. Paste text or upload an HTML or PDF file.">
-        <div className="page-actions">
-          <Link href="/gmail">Set up Gmail</Link>
-        </div>
-      </PageHeader>
+        description="Paste text or upload an HTML or PDF file of your study workspace."
+        tooltip="Why? Your study workspace (announcements, assignments, course notes) is turned into structured academic items (tasks, deadlines, events). After processing, the source is saved as a revision, academic items are extracted for review, and you can approve or edit them before they become tasks."
+      />
 
       <SourceEntryForm />
     </div>
