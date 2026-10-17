@@ -16,6 +16,7 @@ import type {
   Course,
   ReviewState,
 } from "@/lib/academics";
+import type { Task } from "@/lib/tasks";
 
 const ITEM_TYPES: AcademicItemType[] = [
   "assignment",
@@ -753,6 +754,9 @@ export function DeleteRecordButton({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
   useDialog(open, dialogRef);
 
   const endpoint = kind === "course" ? "courses" : "academic-items";
@@ -761,6 +765,44 @@ export function DeleteRecordButton({
   function close() {
     if (busy) return;
     setOpen(false);
+  }
+
+  async function checkTasks() {
+    setChecking(true);
+    setCheckError(null);
+    setTasks(null);
+    try {
+      const param = kind === "course" ? "course_id" : "academic_item_id";
+      const collected: Task[] = [];
+      let offset = 0;
+      while (true) {
+        const response = await fetch(
+          `/api/tasks?${param}=${encodeURIComponent(id)}&limit=100&offset=${offset}`,
+        );
+        const data = (await response.json()) as {
+          items?: Task[];
+          has_more?: boolean;
+          next_offset?: number | null;
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(data.error || "The task service did not respond.");
+        }
+        collected.push(...(data.items ?? []));
+        if (!data.has_more) break;
+        offset = data.next_offset ?? offset + 100;
+        if (offset > 100000) break;
+      }
+      setTasks(collected);
+    } catch (cause) {
+      setCheckError(
+        cause instanceof Error
+          ? cause.message
+          : "The task service did not respond.",
+      );
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function confirm() {
@@ -799,7 +841,11 @@ export function DeleteRecordButton({
         title={`Delete ${noun}`}
         onClick={() => {
           setError(null);
+          setBusy(false);
+          setTasks(null);
+          setCheckError(null);
           setOpen(true);
+          void checkTasks();
         }}>
         <TrashIcon />
       </button>
@@ -825,19 +871,53 @@ export function DeleteRecordButton({
           <p className="panel-note">
             “{name}” will be removed. Linked tasks and courses are kept.
           </p>
+          {checking ? (
+            <p className="panel-note" role="status">
+              Checking for linked tasks…
+            </p>
+          ) : checkError ? (
+            <p className="message error" role="alert">
+              Could not list linked tasks, so nothing can be deleted yet.{" "}
+              {checkError}
+            </p>
+          ) : tasks && tasks.length > 0 ? (
+            <div className="task-delete-cascade">
+              <p>
+                {tasks.length === 1
+                  ? "1 task linked to this will be unlinked:"
+                  : `${tasks.length} tasks linked to this will be unlinked:`}
+              </p>
+              <ul className="task-delete-steps">
+                {tasks.map((task) => (
+                  <li key={task.id}>{task.title}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {error ? (
             <p className="message error" role="alert">
               {error}
             </p>
           ) : null}
           <div className="task-dialog-actions">
-            <button
-              type="button"
-              className="submit-button is-danger"
-              disabled={busy}
-              onClick={confirm}>
+            {checkError ? (
+              <button
+                type="button"
+                className="submit-button"
+                disabled={checking}
+                onClick={() => void checkTasks()}>
+                Check again
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="submit-button is-danger"
+                disabled={busy || checking || tasks === null}
+                onClick={confirm}>
               {busy ? "Deleting…" : `Delete ${noun}`}
             </button>
+            )}
             <button
               type="button"
               className="connect-button"

@@ -1,3 +1,5 @@
+import { proxyJsonRequest } from "@/lib/proxy";
+
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8001";
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -44,4 +46,9 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  return proxyJsonRequest(request, `/api/tasks${url.search}`, "task service");
 }
