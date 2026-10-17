@@ -4,10 +4,16 @@ import { PageHeader } from "@/components/page-header";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { formatDate, itemTypeLabel } from "@/components/course-board";
 import {
+  ItemEditButton,
+  DeleteRecordButton,
+} from "@/components/academic-dialogs";
+import {
   backendUnavailableMessage,
   listAcademicItems,
   listChanges,
+  listCourses,
   type Change,
+  type Course,
 } from "@/lib/academics";
 
 export const metadata: Metadata = {
@@ -65,14 +71,17 @@ function ChangeDiff({ change }: { change: Change }) {
 export default async function InboxPage() {
   let changes = null;
   let items = null;
+  let courses: Course[] = [];
   let error: string | null = null;
   try {
-    const [changePage, itemPage] = await Promise.all([
+    const [changePage, itemPage, coursePage] = await Promise.all([
       listChanges("limit=50"),
       listAcademicItems("limit=20"),
+      listCourses("limit=100"),
     ]);
     changes = changePage.items;
     items = itemPage.items;
+    courses = coursePage.items;
   } catch (cause) {
     error =
       cause instanceof Error ? cause.message : backendUnavailableMessage();
@@ -169,6 +178,10 @@ export default async function InboxPage() {
                       <span className={`review-pill is-${item.review_state}`}>
                         {itemTypeLabel(item.review_state)}
                       </span>
+                    </div>
+                    <div className="item-row-actions">
+                      <ItemEditButton item={item} courses={courses} />
+                      <DeleteRecordButton kind="item" id={item.id} name={item.title} />
                     </div>
                   </li>
                 ))}
