@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { CollapsibleSection } from "@/components/collapsible-section";
-import { formatDate, itemTypeLabel } from "@/components/course-board";
+import { formatDate, formatDateTime, itemTypeLabel } from "@/components/course-board";
 import {
   ItemEditButton,
   DeleteRecordButton,
@@ -139,7 +139,9 @@ export default async function InboxPage() {
                       <span className="change-origin">
                         {change.origin.replace(/_/g, " ")}
                       </span>
-                      <span className="change-date tnum">
+                      <span
+                        className="change-date tnum"
+                        title={formatDateTime(change.recorded_at)}>
                         {formatDate(change.recorded_at)}
                       </span>
                     </div>
@@ -181,7 +183,11 @@ export default async function InboxPage() {
                     </div>
                     <div className="item-row-actions">
                       <ItemEditButton item={item} courses={courses} />
-                      <DeleteRecordButton kind="item" id={item.id} name={item.title} />
+                      <DeleteRecordButton
+                        kind="item"
+                        id={item.id}
+                        name={item.title}
+                      />
                     </div>
                   </li>
                 ))}

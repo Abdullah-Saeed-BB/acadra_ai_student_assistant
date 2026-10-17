@@ -32,6 +32,21 @@ export function formatDate(iso: string | null): string {
   return `${name} ${Number(day)}, ${year}`;
 }
 
+/** Render an ISO timestamp as a stable, locale-independent date and time. */
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return "No date";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const year = date.getUTCFullYear();
+  const month = MONTHS[date.getUTCMonth()] ?? String(date.getUTCMonth() + 1);
+  const day = date.getUTCDate();
+  let hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${year} ${month} ${day} ${hours}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+}
+
 export function itemTypeLabel(type: string): string {
   return type ? type[0].toUpperCase() + type.slice(1) : type;
 }
