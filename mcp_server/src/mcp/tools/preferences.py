@@ -46,11 +46,15 @@ def register(mcp: FastMCP) -> None:
     async def study_set_preferences(
         preferred_daily_minutes: Annotated[int | None, Field(default=None, ge=1, le=1440, description="Preferred total daily effort in minutes")] = None,
         focus_task_count: Annotated[int | None, Field(default=None, ge=1, le=20, description="Target focus task count per day")] = None,
+        clear_preferred_daily_minutes: Annotated[bool, Field(default=False, description="Clear the preferred daily minutes default instead of leaving it unchanged")] = False,
+        clear_focus_task_count: Annotated[bool, Field(default=False, description="Clear the focus task count default instead of leaving it unchanged")] = False,
     ) -> dict[str, Any]:
         prefs = await set_preferences(
-            preferred_daily_minutes=preferred_daily_minutes,
-            focus_task_count=focus_task_count,
+            preferred_daily_minutes=None if clear_preferred_daily_minutes else preferred_daily_minutes,
+            focus_task_count=None if clear_focus_task_count else focus_task_count,
             scope="default",
+            clear_preferred_daily_minutes=clear_preferred_daily_minutes,
+            clear_focus_task_count=clear_focus_task_count,
         )
         return {
             "preferred_daily_minutes": prefs.preferred_daily_minutes,

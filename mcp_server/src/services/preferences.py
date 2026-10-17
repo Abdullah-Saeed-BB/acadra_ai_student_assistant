@@ -42,8 +42,15 @@ async def set_preferences(
     preferred_daily_minutes: int | None = None,
     focus_task_count: int | None = None,
     scope: str = "default",
+    clear_preferred_daily_minutes: bool = False,
+    clear_focus_task_count: bool = False,
 ) -> PreferencesView:
-    """Upsert planning defaults for the single student scope."""
+    """Upsert planning defaults for the single student scope.
+
+    A non-null value replaces the stored default. A null value only clears
+    the field when its matching ``clear_*`` flag is sent, so a caller can
+    distinguish "leave this field alone" from "remove this default".
+    """
     async with get_session(expire_on_commit=False) as session:
         async with session.begin():
             pref = await session.scalar(
@@ -54,15 +61,19 @@ async def set_preferences(
                 pref = PlanningPreferences(
                     id=uuid4(),
                     scope=scope,
-                    preferred_daily_minutes=preferred_daily_minutes,
-                    focus_task_count=focus_task_count,
+                    preferred_daily_minutes=None if clear_preferred_daily_minutes else preferred_daily_minutes,
+                    focus_task_count=None if clear_focus_task_count else focus_task_count,
                     updated_at=now,
                 )
                 session.add(pref)
             else:
-                if preferred_daily_minutes is not None:
+                if clear_preferred_daily_minutes:
+                    pref.preferred_daily_minutes = None
+                elif preferred_daily_minutes is not None:
                     pref.preferred_daily_minutes = preferred_daily_minutes
-                if focus_task_count is not None:
+                if clear_focus_task_count:
+                    pref.focus_task_count = None
+                elif focus_task_count is not None:
                     pref.focus_task_count = focus_task_count
                 pref.updated_at = now
 

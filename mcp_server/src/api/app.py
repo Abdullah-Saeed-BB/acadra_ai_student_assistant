@@ -34,6 +34,7 @@ from src.api.routes.courses import (
 )
 from src.api.routes.gmail import authorize_gmail, get_gmail_configuration, gmail_callback, put_gmail_configuration
 from src.api.routes.manual_text import add_manual_file, add_manual_text, get_source_candidates
+from src.api.routes.preferences import get_preferences_route, put_preferences_route
 from src.api.routes.tasks import (
     create_task_route,
     delete_task_route,
@@ -120,6 +121,8 @@ app.add_route("/api/tasks/{task_id}", delete_task_route, methods=["DELETE"])
 app.add_route("/api/plan/today", get_today_plan_route, methods=["GET"])
 app.add_route("/api/plan/upcoming", get_upcoming_plan_route, methods=["GET"])
 app.add_route("/api/plan/backlog", get_backlog_route, methods=["GET"])
+app.add_route("/api/preferences", get_preferences_route, methods=["GET"])
+app.add_route("/api/preferences", put_preferences_route, methods=["PUT"])
 app.add_route("/api/connections/gmail", get_gmail_configuration, methods=["GET"])
 app.add_route("/api/connections/gmail", put_gmail_configuration, methods=["PUT"])
 app.add_route("/api/connections/gmail/authorize", authorize_gmail, methods=["GET"])

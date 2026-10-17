@@ -495,6 +495,28 @@ class ChangeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PlanningPreferencesRequest(BaseModel):
+    """Planning defaults used for daily suggestions.
+
+    ``null`` clears the matching field when its ``clear_*`` flag is sent;
+    an absent field is left unchanged. This lets a student remove a
+    default without losing the other one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    preferred_daily_minutes: int | None = Field(default=None, ge=1, le=1440)
+    clear_preferred_daily_minutes: bool = False
+    focus_task_count: int | None = Field(default=None, ge=1, le=20)
+    clear_focus_task_count: bool = False
+
+
+class PlanningPreferencesResponse(BaseModel):
+    preferred_daily_minutes: int | None
+    focus_task_count: int | None
+    updated_at: datetime | None
+
+
 class ChangeListResponse(BaseModel):
     items: list[ChangeResponse]
     limit: int
