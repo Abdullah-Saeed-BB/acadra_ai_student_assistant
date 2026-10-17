@@ -29,7 +29,7 @@ export default function ConnectorsPage() {
       />
 
       <section className="connectors-grid" aria-label="Available connectors">
-        <Link href="/connecter/gmail" className="connector-card">
+        <Link href="/connecters/gmail" className="connector-card">
           <div className="connector-card-head">
             <div className="connector-card-title-wrap">
               <svg
@@ -58,7 +58,8 @@ export default function ConnectorsPage() {
             </span>
           </div>
           <p className="connector-card-description">
-            Save the exact sender addresses Acadra may import from and start Google OAuth. Message import is not yet implemented.
+            Save the exact sender addresses Acadra may import from and start
+            Google OAuth. Message import is not yet implemented.
           </p>
         </Link>
       </section>
