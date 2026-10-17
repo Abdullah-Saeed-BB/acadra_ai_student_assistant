@@ -12,8 +12,7 @@ export default function AddSourcePage() {
     <div className="page">
       <PageHeader
         title="Add a source"
-        description="Enter information for your study workspace. Paste text or upload an HTML or PDF file."
-      >
+        description="Enter information for your study workspace. Paste text or upload an HTML or PDF file.">
         <div className="page-actions">
           <Link href="/gmail">Set up Gmail</Link>
         </div>

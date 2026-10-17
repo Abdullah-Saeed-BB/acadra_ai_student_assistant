@@ -2116,3 +2116,57 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------- connectors -- */
+.connectors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.connector-card {
+  display: block;
+  padding: 22px 24px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.connector-card:hover {
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.connector-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.connector-card-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.connector-card-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--muted);
+}
+
+.connector-card-description {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 14px;
+}

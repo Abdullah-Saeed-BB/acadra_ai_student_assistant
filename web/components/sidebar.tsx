@@ -98,11 +98,13 @@ function AddSourceIcon(props: NavIconProps) {
   );
 }
 
-function GmailIcon(props: NavIconProps) {
+function ConnectorsIcon(props: NavIconProps) {
   return (
     <NavIcon {...props}>
-      <rect x="3" y="5" width="18" height="14" rx="2.5" />
-      <path d="m4 7 8 6 8-6" />
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </NavIcon>
   );
 }
@@ -175,7 +177,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/inbox", label: "Inbox", icon: InboxIcon },
       { href: "/courses", label: "Courses", icon: CoursesIcon },
       { href: "/sources/new", label: "Add source", icon: AddSourceIcon },
-      { href: "/gmail", label: "Gmail", icon: GmailIcon },
+      { href: "/connecters", label: "Connectors", icon: ConnectorsIcon },
     ],
   },
   {
