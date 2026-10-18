@@ -25,7 +25,12 @@ export default async function TodayPage() {
 
   const tasks = plan?.tasks ?? [];
   const total = plan?.total_estimated_minutes ?? 0;
-  const defaultDay = plan?.day ?? new Date().toISOString().slice(0, 10);
+  const defaultDay =
+    plan?.day ??
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(
+      2,
+      "0",
+    )}-${String(new Date().getDate()).padStart(2, "0")}`;
 
   return (
     <div className="page">

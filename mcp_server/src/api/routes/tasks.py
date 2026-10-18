@@ -375,7 +375,7 @@ async def get_today_plan_route(request: Request) -> JSONResponse:
         return _validation_error(exc)
 
     try:
-        plan = await get_today_plan(day=params.day)
+        plan = await get_today_plan(day=params.day, timezone_name=params.timezone)
     except (RuntimeError, SQLAlchemyError):
         return JSONResponse({"error": "Task storage is unavailable."}, status_code=503)
 

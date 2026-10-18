@@ -551,9 +551,9 @@ async def get_today_plan(day: date | None = None, timezone_name: str | None = No
                 tz = ZoneInfo(timezone_name)
                 day = datetime.now(tz).date()
             except Exception:
-                day = datetime.now(timezone.utc).date()
+                day = datetime.now().date()
         else:
-            day = datetime.now(timezone.utc).date()
+            day = datetime.now().date()
 
     async with get_session() as session:
         tasks = list((await session.scalars(
@@ -569,7 +569,7 @@ async def get_today_plan(day: date | None = None, timezone_name: str | None = No
 async def get_upcoming_plan(days: int = 7, start_day: date | None = None) -> UpcomingPlanView:
     """Group tasks across upcoming days with workload estimates."""
     if start_day is None:
-        start_day = datetime.now(timezone.utc).date()
+        start_day = datetime.now().date()
     end_day = start_day + timedelta(days=days - 1)
 
     async with get_session() as session:

@@ -22,26 +22,33 @@ const MONTHS = [
   "Dec",
 ];
 
-/** Render an ISO date as a stable, locale-independent label. */
+/** Render an ISO date in the user's local timezone. */
 export function formatDate(iso: string | null): string {
   if (!iso) return "No date";
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!match) return iso;
-  const [, year, month, day] = match;
-  const name = MONTHS[Number(month) - 1] ?? month;
-  return `${name} ${Number(day)}, ${year}`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+    if (!match) return iso;
+    const [, year, month, day] = match;
+    const name = MONTHS[Number(month) - 1] ?? month;
+    return `${name} ${Number(day)}, ${year}`;
+  }
+  const year = date.getFullYear();
+  const month = MONTHS[date.getMonth()] ?? String(date.getMonth() + 1);
+  const day = date.getDate();
+  return `${month} ${day}, ${year}`;
 }
 
-/** Render an ISO timestamp as a stable, locale-independent date and time. */
+/** Render an ISO timestamp in the user's local timezone. */
 export function formatDateTime(iso: string | null): string {
   if (!iso) return "No date";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const year = date.getUTCFullYear();
-  const month = MONTHS[date.getUTCMonth()] ?? String(date.getUTCMonth() + 1);
-  const day = date.getUTCDate();
-  let hours = date.getUTCHours();
-  const minutes = date.getUTCMinutes();
+  const year = date.getFullYear();
+  const month = MONTHS[date.getMonth()] ?? String(date.getMonth() + 1);
+  const day = date.getDate();
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
   const meridiem = hours >= 12 ? "PM" : "AM";
   hours = hours % 12 || 12;
   return `${year} ${month} ${day} ${hours}:${String(minutes).padStart(2, "0")} ${meridiem}`;

@@ -351,6 +351,7 @@ class TodayPlanQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     day: date | None = None
+    timezone: str | None = None
 
 
 class TodayPlanResponse(BaseModel):

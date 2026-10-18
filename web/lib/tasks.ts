@@ -146,8 +146,9 @@ async function getJson<T>(path: string): Promise<T> {
   return requestJson<T>(path);
 }
 
-export function getTodayPlan(): Promise<TodayPlan> {
-  return getJson<TodayPlan>("/api/plan/today");
+export function getTodayPlan(timezone?: string): Promise<TodayPlan> {
+  const query = timezone ? `?timezone=${encodeURIComponent(timezone)}` : "";
+  return getJson<TodayPlan>(`/api/plan/today${query}`);
 }
 
 export function getUpcomingPlan(days = 7): Promise<UpcomingPlan> {
