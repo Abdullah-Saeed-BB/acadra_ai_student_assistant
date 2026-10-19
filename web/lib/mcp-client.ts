@@ -31,7 +31,7 @@ const DEFAULT_MCP_SERVER_URL = "http://127.0.0.1:8001/mcp";
  * Wall-clock budget for one request/response round trip (connect, discovery, or
  * a tool call). Long-lived GET streams used for server push are not time-boxed.
  */
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 const BRIDGE_CLIENT_NAME = "acadra-web-bridge";
 const BRIDGE_CLIENT_VERSION = "0.1.0";
@@ -452,6 +452,15 @@ export async function replyWithTrace(
       ),
     ];
 
+    const requiredByTool = new Map(
+      filtered.map((tool) => [
+        tool.name,
+        Array.isArray((tool.inputSchema as { required?: unknown } | undefined)?.required)
+          ? ((tool.inputSchema as { required: string[] }).required)
+          : [],
+      ]),
+    );
+
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const step: AgentStepTrace = {
         round: round + 1,
@@ -518,6 +527,7 @@ export async function replyWithTrace(
         tool_calls: toolCalls,
       });
 
+      let lastSignature: string | null = null;
       for (const call of toolCalls) {
         const args = parseToolArguments(call.function.arguments);
         step.toolCalls.push({
@@ -526,39 +536,68 @@ export async function replyWithTrace(
           argumentsRaw: call.function.arguments,
           argumentsParsed: args,
         });
+
+        // Guard: refuse empty/missing required arguments without an MCP round-trip.
+        const required = requiredByTool.get(call.function.name) ?? [];
+        const missing = required.filter((field) => {
+          const value = args[field];
+          return value === undefined || value === null || value === "";
+        });
+        const signature = `${call.function.name}:${JSON.stringify(args)}`;
+        const isDuplicate = signature === lastSignature;
+
         let resultText: string;
-        try {
-          const result = await client.callTool({
-            name: call.function.name,
-            arguments: args,
-          });
-          const outcome = normalizeToolResult(call.function.name, result);
-          resultText = renderOutcome(outcome);
-          step.toolOutputs.push(
-            outcome.ok
-              ? {
-                  tool: outcome.tool,
-                  ok: true,
-                  renderedText: resultText,
-                  data: outcome.data,
-                }
-              : {
-                  tool: outcome.tool,
-                  ok: false,
-                  renderedText: resultText,
-                  error: outcome.error,
-                },
-          );
-        } catch (error) {
-          const detail = describeError(error);
-          resultText = `That lookup failed: ${detail}`;
+        if (missing.length > 0) {
+          resultText = `Invalid tool call: missing required argument(s): ${missing.join(", ")}. Provide them before calling ${call.function.name}.`;
           step.toolOutputs.push({
             tool: call.function.name,
             ok: false,
             renderedText: resultText,
-            error: { code: "error", message: resultText },
+            error: { code: "invalid_arguments", message: resultText },
           });
+        } else if (isDuplicate) {
+          resultText = `Skipped duplicate identical call to ${call.function.name}.`;
+          step.toolOutputs.push({
+            tool: call.function.name,
+            ok: false,
+            renderedText: resultText,
+            error: { code: "duplicate_call", message: resultText },
+          });
+        } else {
+          try {
+            const result = await client.callTool({
+              name: call.function.name,
+              arguments: args,
+            });
+            const outcome = normalizeToolResult(call.function.name, result);
+            resultText = renderOutcome(outcome);
+            step.toolOutputs.push(
+              outcome.ok
+                ? {
+                    tool: outcome.tool,
+                    ok: true,
+                    renderedText: resultText,
+                    data: outcome.data,
+                  }
+                : {
+                    tool: outcome.tool,
+                    ok: false,
+                    renderedText: resultText,
+                    error: outcome.error,
+                  },
+            );
+          } catch (error) {
+            const detail = describeError(error);
+            resultText = `That lookup failed: ${detail}`;
+            step.toolOutputs.push({
+              tool: call.function.name,
+              ok: false,
+              renderedText: resultText,
+              error: { code: "error", message: resultText },
+            });
+          }
         }
+        lastSignature = signature;
         chatMessages.push({
           role: "tool",
           tool_call_id: call.id,
@@ -576,7 +615,7 @@ export async function replyWithTrace(
   });
 }
 
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 10;
 
 const CHAT_SYSTEM_PROMPT =
   "You are Alexa+, a friendly study-planning assistant. Be warm and conversational, " +
@@ -589,7 +628,17 @@ const CHAT_SYSTEM_PROMPT =
   "Answer from the study_* tool results when the user asks about their plan, tasks, " +
   "deadlines, courses, sources, or preferences; call the matching tool instead of " +
   "guessing. For greetings or small talk, reply directly without tools. " +
-  "Stay grounded in what the tools returned.";
+  "Stay grounded in what the tools returned. " +
+  "Planning rules: " +
+  "1) Before creating a task, call study_list_tasks or study_get_today_plan to check " +
+  "for an existing similar task; if one exists, reuse or update it instead of " +
+  "creating a duplicate. " +
+  "2) Never call study_create_task without title, selected_day, and estimated_minutes. " +
+  "3) When the user corrects which item they mean (for example first quiz to second " +
+  "quiz), do not mention or act on the earlier or already-past item. " +
+  "4) For 'tomorrow' use the day after today; for 'tonight' use today. " +
+  "5) Answer 'final exam date' from the academic item whose title contains 'Final exam'. " +
+  "6) Do not echo academic items that are already past unless the user asks.";
 
 type ChatCompletionMessage =
   | { role: "system"; content: string }
@@ -655,52 +704,89 @@ async function completeChat(
     total_tokens: number;
   } | null;
 }> {
-  let response: Response;
-  try {
-    response = await fetch(`${llm.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${llm.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: llm.model,
-        messages: chatMessages,
-        tools: chatTools,
-        tool_choice: "auto",
-        temperature: 0,
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    throw new McpUnavailableError(
-      `The chat model request failed: ${describeError(error)}`,
-    );
+  const maxRetries = Math.max(
+    0,
+    Number(process.env.MODEL_MAX_RETRIES ?? 2) || 0,
+  );
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(`${llm.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${llm.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: llm.model,
+          messages: chatMessages,
+          tools: chatTools,
+          tool_choice: "auto",
+          temperature: 0,
+        }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      lastError = error;
+      console.error(
+        `[mcp-client] chat-completions network error (attempt ${attempt + 1}):`,
+        describeError(error),
+      );
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        continue;
+      }
+      throw new McpUnavailableError(
+        `The chat model request failed: ${describeError(error)}`,
+      );
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      lastError = new Error(`HTTP ${response.status}: ${body.slice(0, 300)}`);
+      console.error(
+        `[mcp-client] chat-completions HTTP ${response.status} (attempt ${attempt + 1}):`,
+        body.slice(0, 300),
+      );
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        continue;
+      }
+      throw new McpUnavailableError(
+        `The chat model request failed with status ${response.status}.`,
+      );
+    }
+    const data = (await response.json()) as {
+      choices?: Array<{
+        message?: { content?: string | null; tool_calls?: ChatToolCall[] };
+      }>;
+      usage?: {
+        prompt_tokens?: unknown;
+        completion_tokens?: unknown;
+        total_tokens?: unknown;
+      } | null;
+    };
+    const message = data.choices?.[0]?.message;
+    if (!message) {
+      lastError = new Error("no message");
+      console.error(
+        `[mcp-client] chat-completions returned no message (attempt ${attempt + 1})`,
+      );
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        continue;
+      }
+      throw new McpUnavailableError("The chat model returned no message.");
+    }
+    return {
+      content: message.content ?? null,
+      tool_calls: message.tool_calls,
+      usage: normalizeUsage(data.usage),
+    };
   }
-  if (!response.ok) {
-    throw new McpUnavailableError(
-      `The chat model request failed with status ${response.status}.`,
-    );
-  }
-  const data = (await response.json()) as {
-    choices?: Array<{
-      message?: { content?: string | null; tool_calls?: ChatToolCall[] };
-    }>;
-    usage?: {
-      prompt_tokens?: unknown;
-      completion_tokens?: unknown;
-      total_tokens?: unknown;
-    } | null;
-  };
-  const message = data.choices?.[0]?.message;
-  if (!message) {
-    throw new McpUnavailableError("The chat model returned no message.");
-  }
-  return {
-    content: message.content ?? null,
-    tool_calls: message.tool_calls,
-    usage: normalizeUsage(data.usage),
-  };
+  throw new McpUnavailableError(
+    `The chat model request failed: ${describeError(lastError)}`,
+  );
 }
 
 /** Pulls exact token counts out of the provider's `usage` block, if present. */
