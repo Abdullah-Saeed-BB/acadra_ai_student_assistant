@@ -2,10 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { CollapsibleSection } from "@/components/collapsible-section";
-import { formatDate, formatDateTime, itemTypeLabel } from "@/components/course-board";
+import {
+  formatDate,
+  formatDateTime,
+  itemTypeLabel,
+} from "@/components/course-board";
 import {
   ItemEditButton,
   DeleteRecordButton,
+  ItemCreateButton,
 } from "@/components/academic-dialogs";
 import {
   backendUnavailableMessage,
@@ -96,9 +101,9 @@ export default async function InboxPage() {
         title="Inbox"
         description="Recent academic records and the changes recorded against them."
         tooltip="An academic item is a tracked fact from a source — an assignment, announcement, reading, or event — with its course, dates, review state, and the source evidence behind it. The inbox lists these records and the changes recorded against them.">
-        <Link className="connect-button" href="/courses">
-          Manage courses
-        </Link>
+        <div className="page-actions">
+          <ItemCreateButton courses={courses} label="New academic item" />
+        </div>
       </PageHeader>
 
       {error ? (
