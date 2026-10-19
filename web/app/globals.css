@@ -699,6 +699,9 @@ a {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
+  /* A finger on the grip reorders the row instead of scrolling the page. */
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .task-card:hover .task-drag-handle,
@@ -802,6 +805,12 @@ a {
   color: var(--priority-coral);
   background: rgba(150, 53, 44, 0.08);
   border-color: rgba(150, 53, 44, 0.35);
+}
+
+/* The edit and delete pair sits as if it were loose in its row on wide
+   screens; a phone can then lay the pair out as one block below the title. */
+.task-row-actions {
+  display: contents;
 }
 
 /* The task being dragged keeps its place but fades until it is dropped. */
@@ -1987,6 +1996,7 @@ a {
     height: auto;
     gap: 16px;
     padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
     overflow: visible;
     background: var(--paper);
     border-right: 0;
@@ -2004,6 +2014,8 @@ a {
 
   .nav-toggle {
     display: inline-flex;
+    min-height: 44px;
+    padding: 8px 14px;
   }
 
   .sidebar-backdrop {
@@ -2030,16 +2042,23 @@ a {
     display: flex;
     gap: 20px;
     max-height: calc(100vh - 73px);
-    max-height: calc(100dvh - 73px);
+    max-height: calc(100dvh - 84px - env(safe-area-inset-top));
     padding: 16px 16px 20px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
     overflow-y: auto;
     background: var(--paper);
     border-bottom: 1px solid var(--line);
     box-shadow: 0 18px 34px rgba(20, 46, 54, 0.18);
   }
 
+  /* The menu is a touch surface in this range, so rows clear 44px. */
+  .sidebar-nav.open .nav-item {
+    min-height: 44px;
+  }
+
   .app-content {
     padding: 28px 18px 64px;
+    padding-bottom: max(56px, calc(40px + env(safe-area-inset-bottom)));
   }
 
   .page-header {
@@ -2184,4 +2203,428 @@ a {
 .connector-card-status--connected {
   background: #dcfce7;
   color: #15803d;
+}
+
+/* ------------------------------------------------- mobile: task views -- */
+
+/*
+  Phones get one container per task instead of a card inside a panel, controls
+  sized for a thumb, and a row that gives the title the full width. The panels
+  that exist only to frame a task list dissolve, so the planning views stay a
+  single column of records rather than a stack of nested cards.
+
+  Tap targets: the check circle keeps its drawing size and grows a 44px hit
+  area; the pencil, trash, grip, and menu controls take a full 44px box.
+*/
+
+@media (max-width: 640px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  .app-content {
+    padding: 22px 16px max(56px, calc(40px + env(safe-area-inset-bottom)));
+  }
+
+  .page-header {
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .page-lede {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  /* The help mark opens its explanation as a sheet at the bottom edge, where
+     a 260px bubble would otherwise be clipped by the narrow column. */
+  .help-tooltip {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: auto;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    z-index: 80;
+    width: auto;
+    max-width: none;
+    padding: 12px 14px;
+    font-size: 14px;
+    border-radius: var(--radius-md);
+    transform: none;
+  }
+
+  .page-header-actions .page-actions {
+    width: 100%;
+    margin: 0;
+  }
+
+  .page-actions {
+    margin: 4px 0 0;
+  }
+
+  .stat-row {
+    gap: 16px 28px;
+    margin: 18px 0 24px;
+    padding-top: 16px;
+  }
+
+  .stat dd {
+    font-size: 18px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+
+  .panel.empty {
+    padding: 32px 16px;
+  }
+
+  .panel h2 {
+    font-size: 20px;
+  }
+
+  /* The cards are the containers here; the frame around them is not. */
+  .panel:has(.task-cards),
+  .panel:has(.agenda) {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .panel:has(.task-cards) > .panel-note,
+  .panel:has(.agenda) > .panel-note {
+    margin: 0 0 10px;
+  }
+
+  .upcoming-tasks {
+    gap: 24px;
+  }
+
+  .upcoming-tasks .panel {
+    margin-bottom: 0;
+  }
+
+  /* Each day opens with a rule and a readable date instead of a raw ISO day. */
+  .upcoming-tasks .panel:not(:first-child) > .panel-note {
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+
+  .upcoming-tasks .panel > .panel-note:first-child {
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* A day with nothing planned would still cost a full card; on a phone the
+     days that actually have work are the plan. The page keeps its own empty
+     state when every day is blank. */
+  .upcoming-tasks .panel:not(:has(.task-card)) {
+    display: none;
+  }
+
+  .task-cards {
+    gap: 12px;
+  }
+
+  .task-card {
+    gap: 12px;
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .task-card-large {
+    padding: 20px 16px;
+  }
+
+  .task-card-large .task-card-title {
+    font-size: 22px;
+  }
+
+  .task-card-details {
+    font-size: 15px;
+  }
+
+  .task-card-steps {
+    padding-left: 10px;
+  }
+
+  .task-card.is-nested {
+    padding: 12px 0;
+  }
+
+  /* The head becomes two rows: the check and the full-width title, then the
+     state and the row actions below the title, where a thumb can reach. */
+  .task-card-head {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
+    grid-template-areas:
+      "check title title title"
+      "drag  status actions actions";
+    column-gap: 8px;
+    row-gap: 4px;
+    align-items: center;
+  }
+
+  .task-card-head > .task-check {
+    grid-area: check;
+    justify-self: center;
+  }
+
+  .task-card-head > .task-card-title {
+    grid-area: title;
+  }
+
+  .task-card-head > .task-drag-handle {
+    grid-area: drag;
+    justify-self: center;
+  }
+
+  .task-card-head > .task-card-status {
+    grid-area: status;
+    justify-self: start;
+  }
+
+  .task-card-head > .task-row-actions {
+    grid-area: actions;
+    justify-self: end;
+  }
+
+  /* The check circle keeps its size; its hit area is the full 44px cell. */
+  .task-check {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+  }
+
+  .task-check::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+  }
+
+  .task-edit,
+  .task-delete {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+
+  /* No hover on a phone, so the grip stays visible: it is the only way to
+     start a reorder and must look tappable without a pointer. A list with a
+     single row has nothing to trade places with, so it keeps no grip. */
+  .task-drag-handle {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    opacity: 1;
+  }
+
+  .task-cards > .task-card:only-child .task-drag-handle,
+  .agenda > .agenda-step:only-child .task-drag-handle {
+    display: none;
+  }
+
+  .task-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .task-card-status {
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+
+  /* Facts sit two to a line: enough density to scan a phone screen, with
+     values free to wrap when a course or item name is long. */
+  .task-card:not(.is-nested) .task-card-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding-top: 12px;
+  }
+
+  .task-card:not(.is-nested) .task-card-meta > div {
+    min-width: 0;
+  }
+
+  .task-card:not(.is-nested) .task-card-meta dt {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  .task-card-meta dd {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  /* The Backlog's agenda rows: content first, then the grip and the actions
+     as a thumb-height rail beneath it. */
+  .agenda-step {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      "check content"
+      "drag  actions";
+    column-gap: 8px;
+    row-gap: 2px;
+    padding: 12px 0;
+  }
+
+  .agenda-step > .agenda-check {
+    grid-area: check;
+    justify-self: center;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .agenda-check {
+    position: relative;
+  }
+
+  .agenda-check::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+  }
+
+  .agenda-step > .agenda-handle {
+    grid-area: drag;
+    justify-self: center;
+    align-self: center;
+  }
+
+  .agenda-step > div:not(.task-row-actions) {
+    grid-area: content;
+    min-width: 0;
+  }
+
+  .agenda-step > .task-row-actions {
+    grid-area: actions;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .agenda-step .task-edit,
+  .agenda-step .task-delete {
+    margin-top: 0;
+  }
+
+  .agenda-meta,
+  .agenda-source {
+    font-size: 14px;
+  }
+
+  /* Inbox: the change's title gets its own line, then its badge, origin, and
+     the date sit beneath. A field's old and new value never squeeze into a
+     narrow column beside its label. */
+  .change-row {
+    padding: 14px 0;
+  }
+
+  .change-head {
+    gap: 6px 10px;
+  }
+
+  .change-head .page-link {
+    flex: 1 1 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .change-diff li {
+    gap: 2px 6px;
+    padding: 4px 0;
+  }
+
+  .change-field {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .change-before,
+  .change-after {
+    overflow-wrap: anywhere;
+  }
+
+  /* Academic item rows put their edit and delete pair on a thumb row. */
+  .item-row {
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .item-row-main {
+    flex: 1 1 100%;
+    gap: 4px 10px;
+  }
+
+  .item-row-actions {
+    margin-left: auto;
+  }
+
+  .item-row-actions .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .item-title {
+    overflow-wrap: anywhere;
+  }
+
+  .connect-button-small {
+    min-height: 44px;
+    padding: 6px 12px;
+  }
+
+  .connect-button-small svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* Dialogs rise from the bottom edge, where the thumb is, and keep the form
+     clear of the home indicator. */
+  .task-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 20px);
+    margin: auto auto 0;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+  }
+
+  .task-dialog-head h2 {
+    font-size: 20px;
+  }
+
+  .task-dialog-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .task-dialog-body {
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
+  /* Cancel above, the action that changes data below it. */
+  .task-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .task-toast {
+    left: 16px;
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    max-width: none;
+    transform: none;
+  }
 }

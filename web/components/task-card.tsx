@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
 import type { Task, TaskDetail } from "@/lib/tasks";
+import { formatDay } from "@/lib/format";
+import type { TaskDragHandleProps } from "@/components/use-task-reorder";
 import { loadTaskOptions } from "@/lib/task-options";
 import type { TaskOptions } from "@/lib/task-options";
 import {
@@ -44,9 +46,10 @@ function getTaskOptionsCached(): Promise<TaskOptions> {
 
 /** Drag wiring supplied by `useTaskReorder` for a reorderable container. */
 export type TaskCardDrag = {
-  handleProps: { onMouseDown: () => void };
+  handleProps: TaskDragHandleProps;
   itemProps: {
     draggable: boolean;
+    "data-reorder-id": string;
     onDragStart: (event: DragEvent<HTMLElement>) => void;
     onDragEnd: (event: DragEvent<HTMLElement>) => void;
     onDragOver: (event: DragEvent<HTMLElement>) => void;
@@ -99,12 +102,7 @@ export function TaskCard({
   const [options, setOptions] = useState<TaskOptions | null>(optionsCache);
   useEffect(() => {
     let active = true;
-    if (optionsCache) {
-      setOptions(optionsCache);
-      return () => {
-        active = false;
-      };
-    }
+    // The cache resolves synchronously; React bails out when it is unchanged.
     getTaskOptionsCached()
       .then((opts) => {
         if (active) setOptions(opts);
@@ -171,8 +169,10 @@ export function TaskCard({
           )}
         </Heading>
         <span className={`task-card-status task-card-status-${task.status === "done" ? "done" : "todo"}`}>{statusLabel(task.status)}</span>
-        <TaskEditButton task={task} />
-        <TaskDeleteButton task={task} />
+        <div className="task-row-actions">
+          <TaskEditButton task={task} />
+          <TaskDeleteButton task={task} />
+        </div>
       </div>
 
       {task.details ? (
@@ -192,7 +192,7 @@ export function TaskCard({
         {showDay ? (
           <div>
             <dt>Day</dt>
-            <dd>{task.selected_day ?? "Backlog"}</dd>
+            <dd>{formatDay(task.selected_day)}</dd>
           </div>
         ) : null}
         {task.tags.length > 0 ? (
@@ -220,7 +220,7 @@ export function TaskCard({
             {resolvedAcademic.due_at ? (
               <div>
                 <dt>Due</dt>
-                <dd className="tnum">{resolvedAcademic.due_at}</dd>
+                <dd className="tnum">{formatDay(resolvedAcademic.due_at)}</dd>
               </div>
             ) : null}
           </>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { TaskGroup } from "@/components/task-group";
 import { TaskCreateButton } from "@/components/task-create";
+import { formatDay } from "@/lib/format";
 import { backendUnavailableMessage, getUpcomingPlan } from "@/lib/tasks";
 
 export const metadata: Metadata = {
@@ -68,7 +69,8 @@ export default async function UpcomingPage() {
               aria-labelledby={`day-${group.day}`}>
               <p className="panel-note">
                 <span id={`day-${group.day}`}>
-                  {group.day} · {group.tasks.length}{" "}
+                  <span className="day-label">{formatDay(group.day)}</span> ·{" "}
+                  {group.tasks.length}{" "}
                   {group.tasks.length === 1 ? "task" : "tasks"} ·{" "}
                   <span className="tnum">
                     {group.total_estimated_minutes} min

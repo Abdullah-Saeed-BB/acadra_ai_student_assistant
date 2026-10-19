@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 
 /** A task in a reorderable list. Tasks are reordered within their selected day. */
@@ -17,6 +21,7 @@ export type ReorderableTask = {
 
 type ItemDragProps = {
   draggable: boolean;
+  "data-reorder-id": string;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: (event: DragEvent<HTMLElement>) => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
@@ -27,9 +32,29 @@ type ContainerDragProps = {
   onDrop: (event: DragEvent<HTMLElement>) => void;
 };
 
-type HandleDragProps = {
-  onMouseDown: () => void;
+/**
+ * What the grip handle needs from its list: the mouse handlers that arm the
+ * desktop drag, and the pointer handlers that drag the row directly on a
+ * touchscreen.
+ */
+export type TaskDragHandleProps = {
+  onMouseDown: (event: ReactMouseEvent<HTMLElement>) => void;
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLElement>) => void;
 };
+
+/** A finger holding a row's grip handle, tracked by pointer id. */
+type TouchPress = {
+  id: string;
+  pointerId: number;
+};
+
+/** Distance from a viewport edge where a touch drag starts scrolling the page. */
+const AUTOSCROLL_EDGE_PX = 72;
+const AUTOSCROLL_STEP_PX = 12;
 
 /** Move `draggedId` next to `overId`, before it or after it. */
 function moveTo(
@@ -62,6 +87,13 @@ function sameOrder(a: string[], b: string[]): boolean {
  * task is dragged by its handle, and the new order is saved through
  * `/api/tasks/reorder` on drop, then confirmed by refreshing the server data.
  *
+ * Two gestures share that one path: the mouse drags with the native HTML5 drag
+ * events the grip handle arms, and a finger or stylus drags with pointer
+ * events, which is the only gesture touch browsers support. The pointer drag
+ * tracks the row under the finger rather than the drag image, scrolls the page
+ * when the finger reaches an edge, and leaves the rest of the row free to be
+ * tapped and scrolled.
+ *
  * Tasks can only move within their own selected day (or within the Backlog),
  * so dragging never changes a task's day by accident.
  */
@@ -78,6 +110,10 @@ export function useTaskReorder(items: ReorderableTask[]) {
   const movedRef = useRef(false);
   const droppedRef = useRef(false);
   const busyRef = useRef(false);
+  /** The finger currently holding a grip handle, if any. */
+  const pressRef = useRef<TouchPress | null>(null);
+  /** Suppresses the synthetic mouse events a touch fires after it lifts. */
+  const touchGestureRef = useRef(false);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -162,7 +198,102 @@ export function useTaskReorder(items: ReorderableTask[]) {
 
   // Dragging a task by its handle makes the containing card draggable.
   function handleHandleMouseDown(id: string) {
+    // A touch press already owns the gesture; its synthetic mousedown must not
+    // also arm the native drag.
+    if (touchGestureRef.current) return;
     setArmedId(id);
+  }
+
+  /** The finger grabbed a grip handle: the row follows it from here. */
+  function handleHandlePointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    id: string,
+  ) {
+    if (event.pointerType === "mouse" || !canReorder(id)) return;
+
+    touchGestureRef.current = true;
+    // Capture keeps the moves coming to the handle even as the list reorders
+    // around the finger.
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    pressRef.current = { id, pointerId: event.pointerId };
+    draggingRef.current = id;
+    movedRef.current = false;
+    droppedRef.current = false;
+    setError(null);
+    setArmedId(id);
+    setDraggingId(id);
+  }
+
+  function handleHandlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const press = pressRef.current;
+    if (!press || event.pointerId !== press.pointerId) return;
+
+    const over = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-reorder-id]");
+    const overId = over?.dataset.reorderId;
+    if (
+      over &&
+      overId &&
+      overId !== press.id &&
+      canReorder(overId) &&
+      (dayOf(overId) ?? null) === (dayOf(press.id) ?? null)
+    ) {
+      const rect = over.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      const next = moveTo(orderRef.current, press.id, overId, after);
+      if (next !== orderRef.current) {
+        movedRef.current = true;
+        applyOrder(next);
+      }
+    }
+
+    // Held near an edge, the list keeps scrolling under the finger.
+    if (event.clientY < AUTOSCROLL_EDGE_PX) {
+      window.scrollBy(0, -AUTOSCROLL_STEP_PX);
+    } else if (event.clientY > window.innerHeight - AUTOSCROLL_EDGE_PX) {
+      window.scrollBy(0, AUTOSCROLL_STEP_PX);
+    }
+  }
+
+  /** Release the touch gesture flags once the browser stops echoing them. */
+  function releaseTouchGesture() {
+    window.setTimeout(() => {
+      touchGestureRef.current = false;
+    }, 350);
+  }
+
+  function handleHandlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    const press = pressRef.current;
+    if (!press || event.pointerId !== press.pointerId) return;
+    pressRef.current = null;
+    releaseTouchGesture();
+    draggingRef.current = null;
+    setDraggingId(null);
+    setArmedId(null);
+    if (movedRef.current) {
+      void persist(press.id, orderRef.current);
+    }
+    movedRef.current = false;
+  }
+
+  function handleHandlePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    const press = pressRef.current;
+    if (!press || event.pointerId !== press.pointerId) return;
+    pressRef.current = null;
+    releaseTouchGesture();
+    draggingRef.current = null;
+    setDraggingId(null);
+    setArmedId(null);
+    // A cancelled gesture puts the list back where the server last left it.
+    if (movedRef.current) applyOrder(itemsRef.current.map((item) => item.id));
+    movedRef.current = false;
+  }
+
+  // A long press on a grip handle should not open the browser's text menu.
+  function handleHandleContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    if (!pressRef.current) return;
+    event.preventDefault();
   }
 
   function handleItemDragOver(event: DragEvent<HTMLElement>, overId: string) {
@@ -229,6 +360,7 @@ export function useTaskReorder(items: ReorderableTask[]) {
       const reorderable = canReorder(id);
       return {
         draggable: reorderable && armedId === id,
+        "data-reorder-id": id,
         onDragStart: (event) => {
           if (reorderable) handleDragStart(event, id);
         },
@@ -238,8 +370,13 @@ export function useTaskReorder(items: ReorderableTask[]) {
         },
       };
     },
-    handleProps: (id: string): HandleDragProps => ({
+    handleProps: (id: string): TaskDragHandleProps => ({
       onMouseDown: () => handleHandleMouseDown(id),
+      onPointerDown: (event) => handleHandlePointerDown(event, id),
+      onPointerMove: handleHandlePointerMove,
+      onPointerUp: handleHandlePointerUp,
+      onPointerCancel: handleHandlePointerCancel,
+      onContextMenu: handleHandleContextMenu,
     }),
   };
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Task } from "@/lib/tasks";
+import { formatDay } from "@/lib/format";
 import {
   TaskActionNotice,
   TaskCheckButton,
@@ -83,15 +84,19 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                 <p className="agenda-meta">
                   {effortLabel(task.estimated_minutes)} ·{" "}
                   {statusLabel(task.status)}
-                  {task.selected_day ? ` · ${task.selected_day}` : " · Backlog"}
+                  {task.selected_day
+                    ? ` · ${formatDay(task.selected_day)}`
+                    : " · Backlog"}
                   {task.tags.length ? ` · ${task.tags.join(", ")}` : ""}
                 </p>
                 {task.details ? (
                   <p className="agenda-source">{task.details}</p>
                 ) : null}
               </div>
-              <TaskEditButton task={task} />
-              <TaskDeleteButton task={task} />
+              <div className="task-row-actions">
+                <TaskEditButton task={task} />
+                <TaskDeleteButton task={task} />
+              </div>
             </li>
           );
         })}

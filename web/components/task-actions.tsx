@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import type { Task } from "@/lib/tasks";
+import type { TaskDragHandleProps } from "@/components/use-task-reorder";
 import { loadTaskOptions, type TaskOptions } from "@/lib/task-options";
 
 /** The grip icon shown on the drag handle beside a task. */
@@ -230,20 +231,20 @@ function TaskCheckButtonState({
   );
 }
 
-/** The grip button shown beside a task; press and drag to reorder it. */
+/** The grip button shown beside a task; drag it to reorder the task. */
 export function TaskDragHandle({
   className,
   handleProps,
 }: {
   className: string;
-  handleProps: { onMouseDown: () => void };
+  handleProps: TaskDragHandleProps;
 }) {
   return (
     <button
       type="button"
       className={className}
       aria-label="Drag to reorder"
-      title="Hold and drag to reorder"
+      title="Drag to reorder"
       {...handleProps}>
       <GripIcon />
     </button>
