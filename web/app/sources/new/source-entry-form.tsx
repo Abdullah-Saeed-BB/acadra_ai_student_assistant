@@ -23,6 +23,7 @@ type ProcessingResult = {
   id: string;
   title: string;
   ok: boolean;
+  extractionFailed: boolean;
   message: string;
 };
 
@@ -141,6 +142,7 @@ export function SourceEntryForm() {
         id: source.id,
         title: label,
         ok: true,
+        extractionFailed: data.processing_status === "failed",
         message: `Revision ${data.revision_no} - ${data.academic_item_ids.length} academic ${data.academic_item_ids.length === 1 ? "item" : "items"} found - ${data.review_count} to review${data.processing_status === "pending_configuration" ? " (automatic extraction not configured)" : data.processing_status === "failed" ? " (extraction failed)" : ""}`,
       };
     } catch (cause) {
@@ -148,6 +150,7 @@ export function SourceEntryForm() {
         id: source.id,
         title: label,
         ok: false,
+        extractionFailed: false,
         message: cause instanceof Error ? cause.message : "The source could not be saved. Try again.",
       };
     }
@@ -171,6 +174,8 @@ export function SourceEntryForm() {
     }
     setBusy(false);
   }
+
+  const failedResults = results.filter((item) => !item.ok || item.extractionFailed);
 
   return (
     <form className="entry-form" onSubmit={startProcessing}>
@@ -233,11 +238,17 @@ export function SourceEntryForm() {
       )}
 
       {results.length > 0 && (
-        <div className="message success" role="status">
+        <div
+          className={`message ${failedResults.length === results.length ? "error" : "success"}`}
+          role="status"
+        >
           <strong>Processing results</strong>
           <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
             {results.map((item) => (
-              <li key={item.id}>
+              <li
+                key={item.id}
+                style={!item.ok || item.extractionFailed ? { color: "var(--priority-coral)" } : undefined}
+              >
                 <strong>{item.title}:</strong> {item.ok ? "saved" : "failed"} - {item.message}
               </li>
             ))}
