@@ -1,4 +1,6 @@
-# Acadra
+<img width="4222" height="986" alt="Repo banner" src="https://github.com/user-attachments/assets/83b804db-0c0b-438d-8d1b-f63e0e56a4a8" />
+
+<h1 align="center">Acadra</h1>
 
 An AI-powered academic assistant integrated with Alexa+ that consolidates university information from multiple sources, tracks assignments and announcements, and transforms deadlines into personalized, actionable study plans.
 
@@ -45,57 +47,63 @@ Acadra brings together academic information scattered across email, course mater
 
 ### Step-by-step
 
-1. **Clone and enter the project**
+1. **Clone project**
    ```powershell
-   cd C:\Projects\acadra
+   git clone https://github.com/Abdullah-Saeed-BB/acadra_ai_student_assistant.git
    ```
 
-2. **Set up the backend**
+2. **Enter the project**
+   ```
+   cd acadra_ai_student_assistant
+   ```
+
+3. **Set up the backend**
    ```powershell
-   cd app\mcp_server
+   cd mcp_server
    uv sync
    Copy-Item .env.example .env
    ```
-   Edit `app/mcp_server/.env` and set at least `DATABASE_URL` and `GROQ_API_KEY`. For Gmail, also set `ACADRA_GMAIL_CLIENT_ID`, `ACADRA_GMAIL_CLIENT_SECRET`, and `ACADRA_GMAIL_REDIRECT_URI`.
+   Edit `mcp_server/.env` and set at least `DATABASE_URL` and `GROQ_API_KEY`. For Gmail polling, also set `ACADRA_GMAIL_CLIENT_ID`, `ACADRA_GMAIL_CLIENT_SECRET`, and `ACADRA_GMAIL_REDIRECT_URI`. (Get them from the [Google Cloud Console](https://console.cloud.google.com/))
 
-3. **Initialize PostgreSQL**
+4. **Initialize PostgreSQL**
    ```powershell
    $env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_planner"
    uv run db/init_db.py
    ```
    For databases created before the task-list schema, also run:
    ```powershell
-   .\.venv\Scripts\python.exe -m db.migrate_planning_schema
-   .\.venv\Scripts\python.exe -m db.migrate_gmail_ingestion
+   uv run db/init_db.py
    ```
 
-4. **Start the backend** (combined REST + MCP listener)
+5. **Start the backend** (combined REST + MCP listener)
    ```powershell
    .\.venv\Scripts\python.exe -m src.api.app
    # or: uv run api-server
    ```
    It binds to `http://127.0.0.1:8001` and serves REST at `/api` and MCP at `/mcp`.
 
-5. **(Optional) Start the Gmail poll worker** in a separate terminal
+6. **(Optional) Start the Gmail poll worker** in a separate terminal
    ```powershell
    .\.venv\Scripts\python.exe -m src.jobs.gmail_poll
    # or: uv run gmail-poll
    ```
 
-6. **Set up the frontend**
+7. **Set up the frontend**
+   Create new terminal to run the frontend
    ```powershell
-   cd ..\web
+   cd acadra_ai_student_assistant\web
    npm install
-   Copy-Item .env.example .env.local
+   Copy-Item .env.example .env
    ```
    Adjust `MANUAL_SOURCE_API_URL` / `MCP_SERVER_URL` in `.env.local` if needed, then:
    ```powershell
    npm run dev
    ```
 
-7. **Open the app** at `http://localhost:3000`. The Today view is the landing page; manual source entry is at `/sources/new`, connectors at `/connecters`, and the Alexa+ simulator at `/alexa+_simulator`.
+8. **Open the app** at `http://localhost:3000`. The Today view is the landing page; manual source entry is at `/sources/new`, connectors at `/connecters`, and the Alexa+ simulator at `/alexa+_simulator`.
 
 ### Notes
 - The backend has no student authentication yet; keep it on loopback and do not expose it publicly.
 - Scanned/image-only and encrypted PDFs are not supported (OCR required).
-- Run backend tests from `app/mcp_server` with `uv run python -m unittest tests.test_mcp_server`.
+
+## Screenshots
