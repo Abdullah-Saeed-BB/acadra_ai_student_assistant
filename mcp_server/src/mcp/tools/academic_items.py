@@ -22,6 +22,16 @@ from src.services.academic_items import (
 )
 
 
+def _review_message(action: str, changed: bool) -> str:
+    if action == "confirm":
+        state = "Review state set to verified." if changed else "Review state was already verified."
+    elif action == "reject":
+        state = "Review state set to uncertain." if changed else "Review state was already uncertain."
+    else:
+        state = "Academic item fields updated." if changed else "No fields changed."
+    return f"{state} The item still exists; this tool does not delete or merge it."
+
+
 def _serialize_item(item: Any) -> dict[str, Any]:
     return {
         "id": str(item.id),
@@ -45,7 +55,8 @@ def register(mcp: FastMCP) -> None:
         name="study_list_academic_items",
         description=(
             "Read saved academic records with filters and pagination. Ordered by due date (undated last), "
-            "then creation date."
+            "then creation date. This is the recent-items data behind the Acadra Inbox page; pair it with "
+            "study_get_changes_since when the user asks about their inbox."
         ),
         annotations=ToolAnnotations(
             readOnlyHint=True,
@@ -162,8 +173,11 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="study_review_academic_item",
         description=(
-            "Confirm, reject, or correct an academic item fact. Action 'correct' updates allowlisted fields "
-            "(title, details, starts_at, due_at, grade_weight_percent, late_penalty, course_id) and records an immutable change event."
+            "Change an academic item's review state or correct its extracted fields. "
+            "Action 'confirm' marks it verified, 'reject' marks it uncertain, and 'correct' updates "
+            "allowlisted fields (title, details, starts_at, due_at, grade_weight_percent, late_penalty, "
+            "course_id) and records an immutable change event. This tool never deletes, merges, hides, "
+            "or removes an item, and it must not be used to satisfy a delete or merge request."
         ),
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -189,10 +203,12 @@ def register(mcp: FastMCP) -> None:
             # Coerce ISO-8601 date strings and UUID strings before the service writes them.
             parsed_fields = CorrectionFields.model_validate(fields).model_dump(exclude_unset=True)
 
-        item, change = await review_academic_item(parsed_id, action=action, fields=parsed_fields, note=note)
+        item, change, changed = await review_academic_item(parsed_id, action=action, fields=parsed_fields, note=note)
         res = {
             "item": _serialize_item(item),
             "action": action,
+            "changed": changed,
+            "message": _review_message(action, changed),
         }
         if change:
             res["change"] = {

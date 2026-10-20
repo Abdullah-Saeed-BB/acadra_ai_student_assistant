@@ -16,7 +16,11 @@ from src.services.gmail_connection import get_gmail_connection, save_gmail_confi
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="study_get_gmail_connection",
-        description="Read Gmail ingestion connection status and configured sender allowlist.",
+        description=(
+            "Read Gmail ingestion connection status and the configured sender allowlist. "
+            "This does not read the Gmail inbox or any messages; for the Acadra Inbox use "
+            "study_get_changes_since and study_list_academic_items."
+        ),
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -46,7 +50,11 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="study_set_gmail_senders",
-        description="Configure or replace the allowed Gmail senders list (1 to 50 email addresses, normalized to lowercase).",
+        description=(
+            "Configure or replace the allowed Gmail senders list (1 to 50 email addresses, "
+            "normalized to lowercase). This changes Gmail ingestion settings only; it does "
+            "not read or change the Acadra Inbox."
+        ),
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,

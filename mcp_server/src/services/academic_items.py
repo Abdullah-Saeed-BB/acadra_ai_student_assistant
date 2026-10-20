@@ -152,8 +152,13 @@ async def review_academic_item(
     action: str,
     fields: dict[str, Any] | None = None,
     note: str | None = None,
-) -> tuple[AcademicItem, AcademicItemChange | None]:
-    """Execute review action: confirm, reject, or correct."""
+) -> tuple[AcademicItem, AcademicItemChange | None, bool]:
+    """Execute review action: confirm, reject, or correct.
+
+    Returns the item, the recorded change (if any), and whether the item
+    actually changed. ``reject`` only moves the review state to ``uncertain``;
+    it never deletes, merges, hides, or removes the item.
+    """
     action = action.lower()
     if action not in {"confirm", "reject", "correct"}:
         raise InvalidInputError(f"Action must be 'confirm', 'reject', or 'correct', got {action!r}")
@@ -165,15 +170,22 @@ async def review_academic_item(
                 raise NotFoundError(f"Academic item {item_id} was not found.")
 
             change: AcademicItemChange | None = None
+            changed = False
             now = datetime.now(timezone.utc)
 
             if action == "confirm":
-                item.review_state = "verified"
-                item.updated_at = now
+                if item.review_state != "verified":
+                    item.review_state = "verified"
+                    item.updated_at = now
+                    changed = True
 
             elif action == "reject":
-                item.review_state = "uncertain"
-                item.updated_at = now
+                # A review-state change only. The item itself is never deleted,
+                # merged, hidden, or removed by this action.
+                if item.review_state != "uncertain":
+                    item.review_state = "uncertain"
+                    item.updated_at = now
+                    changed = True
 
             elif action == "correct":
                 if not fields:
@@ -194,30 +206,37 @@ async def review_academic_item(
 
                 for key, new_val in fields.items():
                     old_val = getattr(item, key)
+                    if old_val == new_val:
+                        continue
                     before_values[key] = str(old_val) if isinstance(old_val, (UUID, Decimal, datetime)) else old_val
                     setattr(item, key, new_val)
                     after_values[key] = str(new_val) if isinstance(new_val, (UUID, Decimal, datetime)) else new_val
 
-                if note:
+                if after_values and note:
                     after_values["_correction_note"] = note
 
-                item.review_state = "verified"
-                item.updated_at = now
+                if item.review_state != "verified":
+                    before_values["review_state"] = item.review_state
+                    after_values["review_state"] = "verified"
+                    item.review_state = "verified"
 
-                change = AcademicItemChange(
-                    id=uuid4(),
-                    academic_item_id=item.id,
-                    source_revision_id=item.source_revision_id,
-                    origin="student_correction",
-                    change_kind="edited",
-                    before_values=before_values,
-                    after_values=after_values,
-                    recorded_at=now,
-                )
-                session.add(change)
+                if after_values:
+                    item.updated_at = now
+                    changed = True
+                    change = AcademicItemChange(
+                        id=uuid4(),
+                        academic_item_id=item.id,
+                        source_revision_id=item.source_revision_id,
+                        origin="student_correction",
+                        change_kind="edited",
+                        before_values=before_values or None,
+                        after_values=after_values,
+                        recorded_at=now,
+                    )
+                    session.add(change)
 
             await session.flush()
-        return item, change
+        return item, change, changed
 
 
 def _change_value(value: Any) -> Any:

@@ -18,7 +18,11 @@ from src.services.changes import get_changes_since
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="study_get_changes_since",
-        description="Append-only change feed from academic_item_changes with item title and item_type context.",
+        description=(
+            "Append-only change feed from academic_item_changes with item title and item_type context. "
+            "This is the recent-changes data behind the Acadra Inbox page; pair it with "
+            "study_list_academic_items when the user asks about their inbox."
+        ),
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
