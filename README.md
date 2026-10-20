@@ -14,26 +14,25 @@ Acadra brings together academic information scattered across email, course mater
 - **Interfaces** — Alexa+ uses MCP tools/resources; the student web app uses REST endpoints that call the same services and database.
 
 ## Technologies
-
 ### Frontend
-- **Next.js 16** (App Router) with **React 19** and **TypeScript**
-- **Tailwind CSS 4** for styling
-- **Zod** for request validation
-- **@modelcontextprotocol/sdk** for the server-side MCP client bridge
-- Self-hosted **Manrope** and **Fraunces** fonts via `next/font`
+![Next.js](https://img.shields.io/badge/Next.js_16-080808?style=for-the-badge&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Zod](https://img.shields.io/badge/Zod-3E67B1?style=for-the-badge&logo=zod&logoColor=white)
 
 ### Backend
-- **Python 3.12+** with **uv** for dependency and environment management
-- **FastMCP** (MCP Python SDK) over **stdio** or **Streamable HTTP**
-- **Starlette** + **Uvicorn** for the combined REST (`/api`) + MCP (`/mcp`) ASGI app
-- **SQLAlchemy (async)** with **asyncpg** on **PostgreSQL**
-- **python-dotenv**, **python-multipart**, **pypdf**, **keyring** (OS credential manager for Gmail refresh tokens)
-- **rapidfuzz** for matching
+![Python](https://img.shields.io/badge/Python_3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastMCP](https://img.shields.io/badge/FastMCP-000000?style=for-the-badge)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white)
+![uv](https://img.shields.io/badge/uv-7928CA?style=for-the-badge&logo=astral&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Starlette](https://img.shields.io/badge/Starlette-F75A0D?style=for-the-badge&logo=starlette&logoColor=white)
+![Uvicorn](https://img.shields.io/badge/Uvicorn-2CA5E0?style=for-the-badge&logo=uvicorn&logoColor=white)
 
-### AI models
-- Default provider: **Groq**, model `openai/gpt-oss-120b` (used for academic extraction and the Alexa+ chat bridge)
-- Orchestration: **LangChain** + **LangGraph**
-- The web bridge also supports `openai`, `openrouter`, and `deepseek` via `MODEL_PROVIDER`, with an optional Groq fallback
+### AI Models & Orchestration
+![LangChain](https://img.shields.io/badge/LangChain-1E3C3B?style=for-the-badge&logo=langchain&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-000000?style=for-the-badge&logo=langgraph&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-GPT_OSS_120b-F55036?style=for-the-badge&logo=groq&logoColor=white)
+![DeepSeek](https://img.shields.io/badge/OpenRouter-Deepseek_V4_Flash_0731-0066FF?style=for-the-badge&logo=openrouter&logoColor=white)
 
 ## Installing
 
