@@ -42,18 +42,18 @@ Acadra brings together academic information scattered across email, course mater
 - **Python 3.12+** and **uv** (https://docs.astral.sh/uv/)
 - **Node.js 20+** and **npm**
 - **PostgreSQL** (a running instance and a user with `CREATEDB`)
-- (Optional) **Groq API key** for extraction and the Alexa+ bridge
+- **Groq API key** _(Or any AI provider you prefer)_ for extraction and the Alexa+ bridge 
 - (Optional) **Google OAuth credentials** for the Gmail connector
 
 ### Step-by-step
 
 1. **Clone project**
-   ```powershell
+   ```git
    git clone https://github.com/Abdullah-Saeed-BB/acadra_ai_student_assistant.git
    ```
 
 2. **Enter the project**
-   ```
+   ```powershell
    cd acadra_ai_student_assistant
    ```
 
@@ -65,28 +65,24 @@ Acadra brings together academic information scattered across email, course mater
    ```
    Edit `mcp_server/.env` and set at least `DATABASE_URL` and `GROQ_API_KEY`. For Gmail polling, also set `ACADRA_GMAIL_CLIENT_ID`, `ACADRA_GMAIL_CLIENT_SECRET`, and `ACADRA_GMAIL_REDIRECT_URI`. (Get them from the [Google Cloud Console](https://console.cloud.google.com/))
 
-4. **Initialize PostgreSQL**
-   ```powershell
-   $env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_planner"
-   uv run db/init_db.py
-   ```
-   For databases created before the task-list schema, also run:
+4. **Initialize Database on PostgreSQL**
    ```powershell
    uv run db/init_db.py
    ```
 
 5. **Start the backend** (combined REST + MCP listener)
    ```powershell
-   .\.venv\Scripts\python.exe -m src.api.app
-   # or: uv run api-server
+   uv run dev
    ```
-   It binds to `http://127.0.0.1:8001` and serves REST at `/api` and MCP at `/mcp`.
+   It binds to `http://127.0.0.1:8001` to serves REST, and to `http://127.0.0.1:8000` to serves MCP.
 
 6. **(Optional) Start the Gmail poll worker** in a separate terminal
+   Enter to `/mcp_server` then run: 
    ```powershell
-   .\.venv\Scripts\python.exe -m src.jobs.gmail_poll
-   # or: uv run gmail-poll
+   uv run gmail-poll
    ```
+   > Note: You must connect to Gmail in the connecters page after running the frontend to start polling your Gmail.
+
 
 7. **Set up the frontend**
    Create new terminal to run the frontend
