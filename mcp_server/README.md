@@ -139,4 +139,12 @@ uv run mcp-server --transport streamable-http
 
 It listens on `127.0.0.1:8000` at `/mcp` by default. Set `STUDY_MCP_HOST` and `STUDY_MCP_PORT` in the shell if needed. `STUDY_MCP_TRANSPORT` selects the default transport. `.env.example` lists the optional settings; the standalone `mcp-server` entry point does not load `.env` automatically.
 
+Run both the MCP and REST API servers in one terminal:
+
+```powershell
+uv run dev
+```
+
+`uv run dev-servers` is an equivalent alias. The command starts the streamable-http MCP listener on `127.0.0.1:8000` and the REST API listener on `127.0.0.1:8001`; press Ctrl+C to stop both.
+
 The HTTP listener is for local development only. Before remote exposure, add the student authentication and source authorization described in `STRUCTURE.md` and confirm Alexa+ transport requirements.
