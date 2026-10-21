@@ -1,5 +1,3 @@
-<img width="4222" height="986" alt="Repo banner" src="https://github.com/user-attachments/assets/83b804db-0c0b-438d-8d1b-f63e0e56a4a8" />
-
 <h1 align="center">Acadra</h1>
 
 An AI-powered academic assistant integrated with Alexa+ that consolidates university information from multiple sources, tracks assignments and announcements, and transforms deadlines into personalized, actionable study plans.
@@ -16,25 +14,14 @@ Acadra brings together academic information scattered across email, course mater
 - **Interfaces** — Alexa+ uses MCP tools/resources; the student web app uses REST endpoints that call the same services and database.
 
 ## Technologies
-### Frontend
-![Next.js](https://img.shields.io/badge/Next.js_16-080808?style=for-the-badge&logo=next.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Zod](https://img.shields.io/badge/Zod-3E67B1?style=for-the-badge&logo=zod&logoColor=white)
 
-### Backend
-![Python](https://img.shields.io/badge/Python_3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![FastMCP](https://img.shields.io/badge/FastMCP-000000?style=for-the-badge)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white)
-![uv](https://img.shields.io/badge/uv-7928CA?style=for-the-badge&logo=astral&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
-![Starlette](https://img.shields.io/badge/Starlette-F75A0D?style=for-the-badge&logo=starlette&logoColor=white)
-![Uvicorn](https://img.shields.io/badge/Uvicorn-2CA5E0?style=for-the-badge&logo=uvicorn&logoColor=white)
+# Technologies
 
-### AI Models & Orchestration
-![LangChain](https://img.shields.io/badge/LangChain-1E3C3B?style=for-the-badge&logo=langchain&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-000000?style=for-the-badge&logo=langgraph&logoColor=white)
-![Groq](https://img.shields.io/badge/Groq-GPT_OSS_120b-F55036?style=for-the-badge&logo=groq&logoColor=white)
-![DeepSeek](https://img.shields.io/badge/OpenRouter-Deepseek_V4_Flash_0731-0066FF?style=for-the-badge&logo=openrouter&logoColor=white)
+
+
+| Frontend | Backend | AI Models & Orchestration |
+| --- | --- | --- |
+| ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)<br>![Next.js](https://img.shields.io/badge/Next.js_16-080808?style=for-the-badge&logo=next.js&logoColor=white) ![Zod](https://img.shields.io/badge/Zod-3E67B1?style=for-the-badge&logo=zod&logoColor=white) | ![Python](https://img.shields.io/badge/Python_3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white) ![FastMCP](https://img.shields.io/badge/FastMCP-000000?style=for-the-badge) ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white) ![uv](https://img.shields.io/badge/uv-7928CA?style=for-the-badge&logo=astral&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white) ![Starlette](https://img.shields.io/badge/Starlette-F75A0D?style=for-the-badge&logo=starlette&logoColor=white) ![Uvicorn](https://img.shields.io/badge/Uvicorn-2CA5E0?style=for-the-badge&logo=uvicorn&logoColor=white) | ![LangGraph](https://img.shields.io/badge/LangGraph-000000?style=for-the-badge&logo=langgraph&logoColor=white)<br>![LangChain](https://img.shields.io/badge/LangChain-1E3C3B?style=for-the-badge&logo=langchain&logoColor=white) ![Groq](https://img.shields.io/badge/Groq-GPT_OSS_120b-F55036?style=for-the-badge&logo=groq&logoColor=white) ![DeepSeek](https://img.shields.io/badge/OpenRouter-Deepseek_V4_Flash_0731-0066FF?style=for-the-badge&logo=openrouter&logoColor=white) |
 
 ## Installing
 
@@ -103,3 +90,11 @@ Acadra brings together academic information scattered across email, course mater
 - Scanned/image-only and encrypted PDFs are not supported (OCR required).
 
 ## Screenshots
+
+<img width="1901" height="979" alt="‏‏SCR (93)" src="https://github.com/user-attachments/assets/872c8557-fa60-4bfa-84f5-c494e83b84c6" />
+<img width="1901" height="979" alt="‏‏SCR (92)" src="https://github.com/user-attachments/assets/ee6a938b-8000-419c-b2da-ec9b347917e4" />
+<img width="1901" height="979" alt="‏‏SCR (94)" src="https://github.com/user-attachments/assets/c8ce8d85-7584-4d3f-aec1-d83e16045198" />
+<img width="1901" height="979" alt="‏‏SCR (96)" src="https://github.com/user-attachments/assets/460df34f-24f5-4b9b-b5d4-0286396ad72d" />
+<img width="1901" height="979" alt="‏‏SCR (95)" src="https://github.com/user-attachments/assets/8a0a10ca-c3f0-422d-afd0-f636481c4340" />
+<img width="1901" height="979" alt="‏‏SCR (97)" src="https://github.com/user-attachments/assets/2cb0c7f5-8faa-4f30-bbe9-fe39eee6c6d2" />
+<img width="1901" height="979" alt="‏‏SCR (100)" src="https://github.com/user-attachments/assets/7ebf9f21-0b61-4d48-92a3-8de3cf6655f5" />
