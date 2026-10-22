@@ -1,10 +1,13 @@
 <h1 align="center">Acadra</h1>
 
+<img width="2604" height="1269" alt="Repo banner 2" src="https://github.com/user-attachments/assets/4bdd9da7-4176-488c-94ea-599f16ac0e6e" />
+
+<br/>
+
+## Description
 An AI-powered academic assistant integrated with Alexa+ that consolidates university information from multiple sources, tracks assignments and announcements, and transforms deadlines into personalized, actionable study plans.
 
 Students can use natural conversations to monitor progress, identify priorities, and dynamically manage their academic schedules. The web workspace mirrors the same data: a Today plan, upcoming days, backlog, inbox of changes, courses and academic items, manual source entry (pasted text or HTML/PDF files), Gmail connector setup, and an Alexa+ simulator.
-
-## Description
 
 Acadra brings together academic information scattered across email, course materials, and manual notes into one shared study-planner backend:
 
@@ -14,10 +17,6 @@ Acadra brings together academic information scattered across email, course mater
 - **Interfaces** — Alexa+ uses MCP tools/resources; the student web app uses REST endpoints that call the same services and database.
 
 ## Technologies
-
-# Technologies
-
-
 
 | Frontend | Backend | AI Models & Orchestration |
 | --- | --- | --- |
