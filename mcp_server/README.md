@@ -1,150 +1,85 @@
-# Study planner MCP server
+# Acadra MCP Server
 
-This is the MCP backend described in [`system/STRUCTURE.md`](../../system/STRUCTURE.md). Manual plain text, uploaded HTML/PDF files, and incoming Gmail subject/body text are versioned and, when Groq is configured, extracted into source-grounded academic items and change events. Gmail polling and durable extraction retries are implemented. The MCP surface also exposes read tools for sources, revisions, candidates, courses, changes, and evidence; task and plan tools for the Today/Upcoming/Backlog/Kanban views; planning preferences; and a student correction path. The matching REST routes are still planned.
+Python (FastMCP + Starlette) backend for Acadra: owns academic sources, records, progress, and study plans; serves MCP tools/resources to Alexa+ over Streamable HTTP and REST endpoints to the web app, both calling the same services and PostgreSQL. Includes Groq-backed extraction, Gmail polling, and the task-list planning layer.
 
-The same manual-text service is available through an MCP tool for Alexa+ and a local REST endpoint for the future web application. The full MCP contract is in [`MCP_PROPOSEL.md`](../../system/MCP_PROPOSEL.md).
-
-The Python package is `src`, with the entry point at `src/server.py`. Use the command below from `app/mcp_server`; running `src/server.py` directly bypasses its package imports.
-
-## Set up
-
-From `app/mcp_server`:
-
-```powershell
-uv sync
+```text
+app/mcp_server/
+├── pyproject.toml                  # Python package and dependencies
+├── uv.lock                         # Locked dependency versions
+├── .python-version                 # Python version used by uv
+├── .env.example                    # Optional setting names; no secrets
+├── README.md                       # Run, connect, and configuration instructions
+├── data/uploads/                   # Runtime-only original uploads, ignored by Git
+├── db/
+│   ├── init_db.py                 # Create database and SQLAlchemy-declared tables
+│   ├── migrate_gmail_ingestion.py # Add Gmail retry receipts and uniqueness indexes
+│   └── migrate_planning_schema.py # Replace canvas-era planning tables with the task-list schema
+└── src/
+    ├── __init__.py
+    ├── server.py                   # FastMCP instance and transport startup
+    ├── dev.py                      # Run MCP and REST API servers together in one terminal
+    ├── config.py                   # Typed settings and startup validation
+    ├── errors.py                   # Error codes, mapping, and the tool error decorator
+    ├── api/
+    │   ├── app.py                  # Combined REST/MCP ASGI app; loads local .env
+    │   ├── openapi.py              # OpenAPI description for REST routes
+    │   ├── requests.py             # Bounded JSON body, validation, and path-ID helpers
+    │   ├── schemas.py              # REST request and response contracts
+    │   └── routes/
+    │       ├── manual_text.py      # Text and multipart file source routes
+    │       ├── gmail.py            # Gmail settings and Google OAuth callbacks
+    │       ├── academic_items.py   # Academic item list, read, create, update, delete, and evidence
+    │       ├── courses.py          # Course list, read, create, update, and delete
+    │       ├── changes.py          # Academic item change feed
+    │       ├── tasks.py            # Task create, read, update, reorder, delete, and plan views
+    │       └── preferences.py      # Planning preferences read and write
+    ├── mcp/
+    │   ├── tools/
+    │   │   ├── manual_text.py      # study_add_manual_text
+    │   │   ├── academic_items.py   # Item and evidence reads; study_review_academic_item
+    │   │   ├── changes.py          # study_get_changes_since
+    │   │   ├── sources.py          # Source, revision, and candidate reads
+    │   │   ├── courses.py          # Course and course-item reads
+    │   │   ├── tasks.py            # Task CRUD, day moves, and plan views
+    │   │   ├── preferences.py      # Planning defaults get/set
+    │   │   └── connections.py      # Gmail operator reads and allowlist write
+    │   ├── resources/
+    │   │   └── academic_context.py # study:// read-only resource templates
+    │   ├── schemas.py              # Pydantic enums and bounded input contracts
+    │   ├── time_parsing.py         # Lenient date-only/date-time parsing for tool filters
+    │   └── responses.py            # Pagination envelope and response formatting
+    ├── auth/
+    │   └── credential_store.py    # OS credential manager for Gmail refresh tokens
+    ├── connectors/
+    │   ├── gmail.py                # Sender validation, OAuth, and Gmail read requests
+    │   ├── classroom.py            # Placeholder for Classroom client
+    │   └── manual.py               # Bounded plain-text and file intake
+    ├── ingestion/
+    │   ├── text.py                 # Normalize extracted text
+    │   ├── email_text.py           # Bounded Gmail MIME-to-text console preview
+    │   ├── gmail_source.py         # Strict Gmail envelope, MIME limits, and quote removal
+    │   ├── file_text.py            # HTML parsing and bounded PDF worker invocation
+    │   ├── pdf_worker.py           # Isolated pypdf text extraction
+    │   ├── chunking.py             # Structure-aware source windows for bounded extraction
+    │   └── extraction.py           # Restricted chunk/map/merge/validate Groq extraction
+    ├── domain/                     # Academic, source, progress, and plan models
+    ├── services/
+    │   ├── manual_text.py          # Source revision and original-file storage
+    │   ├── gmail_connection.py     # Gmail connection and allowlist persistence
+    │   ├── gmail_poll_state.py     # Persist Gmail history cursor
+    │   ├── gmail_ingestion.py      # Save email revisions and retry queued extraction
+    │   ├── source_processing.py    # Publish extracted facts and changes atomically
+    │   ├── academic_items.py       # List/read items, evidence, and student corrections
+    │   ├── changes.py              # Change feed with joined item context
+    │   ├── sources.py              # Source documents, revisions, and summaries
+    │   ├── courses.py              # Courses and their academic items
+    │   ├── tasks.py                # Task CRUD lifecycle, link changes, ordering, and plan views
+    │   └── preferences.py          # Single-scope planning preferences
+    ├── db/
+    │   ├── schema.py               # SQLAlchemy models for sources, items, and tasks
+    │   └── session.py              # Async PostgreSQL engine and session scope
+    ├── tests/
+    │   └── test_mcp_server.py      # Integration tests for MCP tools and resources
+    └── jobs/
+        └── gmail_poll.py           # One-minute Gmail intake and background extraction
 ```
-
-`uv` creates `.venv` and `uv.lock`. The lockfile should be kept with the project; `.venv` is ignored.
-
-## Initialize PostgreSQL
-
-Set `DATABASE_URL` in your shell or in `app/mcp_server/.env`, then run the initializer from `app/mcp_server`:
-
-```powershell
-$env:DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/study_planner"
-uv run db/init_db.py
-```
-
-The initializer connects to the existing `postgres` maintenance database to create `study_planner` when missing, then creates the tables declared in `src/db/schema.py` using SQLAlchemy metadata. The PostgreSQL user must have `CREATEDB` permission. Since this is a fresh database, run the initializer once to create `source_connections` with `allowed_senders`. `create_all` does not change existing tables if the schema evolves later.
-
-## Gmail connection setup
-
-Set `ACADRA_GMAIL_CLIENT_ID` and `ACADRA_GMAIL_CLIENT_SECRET` in `app/mcp_server/.env`. In Google Cloud Console, register `http://127.0.0.1:8001/api/connections/gmail/callback` as an authorized redirect URI for a Web application OAuth client. Set `ACADRA_GMAIL_REDIRECT_URI` to that exact URI if you use a different local API port. `ACADRA_WEB_URL` defaults to `http://localhost:3000` for returning to the web page after consent. Keep the API bound to loopback; it has no student authentication yet.
-
-Open `http://localhost:3000/connecters/gmail` after starting the API and web app. Enter 1–50 exact sender addresses, save them, then select **Continue with Google**. `GET` and `PUT /api/connections/gmail` expose the saved configuration; `GET /api/connections/gmail/authorize` and `/callback` handle Google OAuth. The client ID and secret stay on the backend. The Google refresh token is placed in the operating system credential manager and only its reference is saved in `source_connections`. A working OS credential manager is required to finish OAuth.
-
-The included Uvicorn entry points disable access logs so OAuth callback codes do not appear in request logs. If you run the ASGI app behind another server or proxy, disable or redact query-string logging on this callback there too.
-
-The `gmail.readonly` Google permission covers the Gmail account; the exact sender list is an application processing rule, not a Google permission boundary.
-
-### Process newly arrived Gmail messages
-
-After connecting the account, stop any older polling worker. From `app/mcp_server`, apply the migration to an existing database and start the worker in a separate terminal:
-
-```powershell
-.\.venv\Scripts\python.exe -m db.migrate_gmail_ingestion
-.\.venv\Scripts\python.exe -m src.jobs.gmail_poll
-```
-
-`uv run gmail-poll` is equivalent when `uv` is available. It checks Gmail every 60 seconds while running. On its **first** check it records the current Gmail history position; only later arrivals from configured exact sender addresses are imported. Existing cursors resume where the previous worker stopped. Messages printed by the old worker before that cursor are not imported retroactively. The worker uses the connected account's stored refresh token and existing OAuth settings.
-
-Each message is sanitized and saved as a source revision before the mailbox cursor advances. Identity is connection + Gmail message ID (not thread ID); unchanged replays reuse their source, revision, and academic items. Subject and body are limited to 64 KiB of clean UTF-8 text. HTML active content and common quoted-reply sections are removed; attachments are ignored. Malformed, oversized, or unsupported bodies receive a durable rejection code. No raw MIME is retained; sanitized text stays in the database for evidence.
-
-The worker processes a durable queue in the background through the same Groq extraction and validation used for manual input. Set `GROQ_API_KEY` as for manual processing. Accepted items, evidence, and change events are committed together and available through `/api/academic-items`, its evidence endpoint, and `/api/sources/{source_document_id}/candidates`. Unknown course associations and ambiguous deadlines remain flagged for review. Different emails remain separate sources; uncertain identity changes within a revision are left unpublished for review.
-
-Console JSON now contains intake/processing status and source/academic IDs instead of email bodies. Failed extraction remains queued with exponential retry delays (2 minutes up to 1 hour); missing Groq configuration retries every minute. Leases allow interrupted processing to resume after restart. The poll loop continues while extraction runs. `--once` performs one poll and drains up to 10 eligible queued messages before exiting; it does not wait through retry delays.
-
-A fetch or storage failure leaves the cursor unchanged, while a saved extraction failure does not block later mail. Sender scope is checked at intake and again before publishing. If Gmail reports an expired history cursor, the worker stops with an error; full-rescan recovery remains a later step. Run only one polling worker per connected account. The migration adds `gmail_ingestion` and uniqueness indexes; it preserves existing records and stops if old duplicate source identities require review. Fresh databases get these through `db.init_db`.
-
-## Manual text intake
-
-Set `DATABASE_URL` in the server process environment before starting the server. Set `GROQ_API_KEY` to enable extraction; `GROQ_MODEL` defaults to `openai/gpt-oss-120b`. Groq receives the cleaned source text for extraction. The MCP tool `study_add_manual_text` accepts:
-
-- `text` (required): plain text up to 64 KiB encoded as UTF-8.
-- `title` (optional): a display title, up to 200 characters.
-- `source_document_id` (optional): an ID previously returned by the tool to replace that manual source. Omit it to create a separate source, even if the text matches another paste.
-
-The result contains `source_document_id`, `source_revision_id`, `revision_no`, `created_revision`, `processing_status`, `academic_item_ids`, and `review_count`. Replacing a source with equivalent normalized text updates its last-seen time but returns the existing revision with `created_revision: false`. Changed text creates the next revision. Processing can be `processed`, `already_processed`, `pending_configuration`, `failed`, or `superseded`. A source remains saved if extraction fails; re-submit the same text with its source ID to retry. Accepted academic fields are stored in `academic_items`, and created or edited values are recorded in `academic_item_changes`.
-
-### REST endpoint for the web app
-
-Run the combined REST and MCP listener from `app/mcp_server`:
-
-```powershell
-.\.venv\Scripts\python.exe -m src.api.app
-```
-
-After syncing the project, `uv run api-server` is equivalent. It binds to `127.0.0.1:8001` by default and serves REST at `/api` and MCP at `/mcp`. Pass `--port 8002` if that port is occupied. On startup, this app reads `app/mcp_server/.env`; an explicitly set `DATABASE_URL` takes precedence. An example request:
-
-```powershell
-$payload = @{ text = "Database assignment due Friday"; title = "Course note" } | ConvertTo-Json
-Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/text -Method Post -ContentType application/json -Body $payload
-```
-
-`POST /api/sources/text` returns `201 Created` for a new source and `200 OK` for a replacement. Include the returned `source_document_id` in a later request to replace that source; omit it to create a new one. Invalid input returns `400`, `413`, `415`, or `422` as appropriate; an unknown source ID returns `404`; unavailable storage returns `503`. The listener has no student authentication yet and must remain on loopback. A future frontend can proxy `/api` to this port.
-
-### Upload HTML or PDF files
-
-`POST /api/sources/files` accepts multipart form fields `file` (required), `title` (optional), and `source_document_id` (optional, for replacing an existing source of the same file type). It returns the same revision and processing fields as text intake. UTF-8 `.html` and `.htm` files may be up to 256 KiB. Text-bearing `.pdf` files may be up to 5 MiB and 20 pages. Extracted text is capped at 64 KiB. Image-only/scanned PDFs need OCR and are rejected; password-protected PDFs are also rejected. The parser does not fetch HTML resources or execute embedded content.
-
-```powershell
-Invoke-RestMethod -Uri http://127.0.0.1:8001/api/sources/files -Method Post -Form @{ file = Get-Item 'C:\path\to\assignment.pdf'; title = 'Assignment handout' }
-```
-
-Original uploaded bytes are stored under `app/mcp_server/data/uploads/` (ignored by Git), with a hash and relative path in `source_files`. Uploaded revisions keep extracted `clean_text` for academic evidence and leave `raw_content` empty. Run the database initializer before the first upload.
-
-### Retrieve academic items
-
-`GET /api/academic-items` reads saved academic records. Optional query parameters are `item_type` (`assignment`, `announcement`, `reading`, or `event`), `course_id` (UUID), `review_state` (`verified`, `uncertain`, or `conflicting`), `due_from` (inclusive), `due_before` (exclusive), `limit` (1–100, default 20), and `offset` (default 0). Date filters require an ISO 8601 date-time with a time zone. Results are ordered by due date with undated items last. The response contains `items`, `has_more`, and `next_offset` for paging.
-
-```powershell
-Invoke-RestMethod -Uri 'http://127.0.0.1:8001/api/academic-items?item_type=assignment&review_state=verified&limit=20' -Method Get
-```
-
-This endpoint reads accepted items stored in `academic_items`, including those from manual text and file extraction. `GET /api/academic-items/{item_id}/evidence` shows the source excerpts, date wording, and review reasons behind an extracted item. `GET /api/sources/{source_document_id}/candidates` shows the latest revision's candidates that need review and were not published as items; the older `/api/sources/text/{source_document_id}/candidates` path also works. An ambiguous or date-only deadline stays `null` in `due_at` and is retained in the evidence response for review. The mistaken direct-item `POST /api/academic-items` route has been removed.
-
-Run the project-level checks from the repository root as shown in [`test/README.md`](../../test/README.md). Set `TEST_DATABASE_URL` to an initialized PostgreSQL database to also run revision and academic-persistence tests.
-
-## MCP tools and resources
-
-`src/server.py` registers every `study_` tool in `src/mcp/tools/` and the `study://` resource templates in `src/mcp/resources/academic_context.py`. Reads cover academic items and evidence, changes, sources and candidates, courses, tasks, and the Today/Upcoming/Backlog/Kanban plans. Writes cover manual text, task create/update/move/reorder/complete/split, academic-item review, planning preferences, and the Gmail sender allowlist. The full contract and its migration map from the original canvas names are in [`MCP_PROPOSEL.md`](../../system/MCP_PROPOSEL.md).
-
-Integration tests for the tools and resources live in `tests/test_mcp_server.py` and run against PostgreSQL. From `app/mcp_server`:
-
-```powershell
-uv run python -m unittest tests.test_mcp_server -v
-```
-
-Apply the planning migration once to a development database created before the task-list schema. It drops the empty canvas-era `tasks`, `planning_preferences`, `study_sessions`, and `availability_windows` tables and recreates `tasks` and `planning_preferences`; academic, source, and change data are preserved.
-
-```powershell
-.\.venv\Scripts\python.exe -m db.migrate_planning_schema
-```
-
-## Run locally
-
-Start the MCP server over stdio:
-
-```powershell
-uv run mcp-server --transport stdio
-```
-
-An MCP client should launch that command as a subprocess. A quiet terminal is normal: stdio is reserved for MCP protocol messages.
-
-For a local Streamable HTTP listener:
-
-```powershell
-uv run mcp-server --transport streamable-http
-```
-
-It listens on `127.0.0.1:8000` at `/mcp` by default. Set `STUDY_MCP_HOST` and `STUDY_MCP_PORT` in the shell if needed. `STUDY_MCP_TRANSPORT` selects the default transport. `.env.example` lists the optional settings; the standalone `mcp-server` entry point does not load `.env` automatically.
-
-Run both the MCP and REST API servers in one terminal:
-
-```powershell
-uv run dev
-```
-
-`uv run dev-servers` is an equivalent alias. The command starts the streamable-http MCP listener on `127.0.0.1:8000` and the REST API listener on `127.0.0.1:8001`; press Ctrl+C to stop both.
-
-The HTTP listener is for local development only. Before remote exposure, add the student authentication and source authorization described in `STRUCTURE.md` and confirm Alexa+ transport requirements.
