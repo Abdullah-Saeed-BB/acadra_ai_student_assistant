@@ -5,16 +5,15 @@
 <br/>
 
 ## Description
-An AI-powered academic assistant integrated with Alexa+ that consolidates university information from multiple sources, tracks assignments and announcements, and transforms deadlines into personalized, actionable study plans.
+An AI-powered academic assistant that consolidates university information from multiple sources, tracks assignments and announcements, and transforms deadlines into personalized, actionable study plans.
 
-Students can use natural conversations to monitor progress, identify priorities, and dynamically manage their academic schedules. The web workspace mirrors the same data: a Today plan, upcoming days, backlog, inbox of changes, courses and academic items, manual source entry (pasted text or HTML/PDF files), Gmail connector setup, and an Alexa+ simulator.
+Students can use natural conversations to monitor progress, identify priorities, and dynamically manage their academic schedules on Alexa+ simulator page. The web workspace mirrors the same data: a Today plan, upcoming days, backlog, inbox of changes, courses and academic items, manual source entry (pasted text or HTML/PDF files), and Gmail connector setup.
 
 Acadra brings together academic information scattered across email, course materials, and manual notes into one shared study-planner backend:
-
-- **Ingestion** — manual plain text, uploaded UTF-8 HTML/PDF files, and Gmail messages from an exact sender allowlist are versioned as source revisions.
-- **Extraction** — a restricted LLM graph (Groq by default) turns source text into source-grounded academic items (assignments, announcements, readings, events) with evidence, review states, and change events.
-- **Planning** — tasks, one-level steps, selected days, and planning preferences power Today / Upcoming / Backlog views and drag reordering.
-- **Interfaces** — Alexa+ uses MCP tools/resources; the student web app uses REST endpoints that call the same services and database.
+ - **Ingestion:** Manual plain text, uploaded UTF-8 HTML/PDF files, and Gmail messages from an exact sender allowlist are versioned as source revisions.
+ - **Extraction:** Restricted LLM graph (Groq by default) turns source text into source-grounded academic items (assignments, announcements, readings, events) with evidence, review states, and change events.
+ - **Planning:** Tasks, one-level steps, selected days, and planning preferences power Today / Upcoming / Backlog views and drag reordering.
+ - **Interfaces:** Alexa+ uses MCP tools/resources; the student web app uses REST endpoints that call the same services and database.
 
 ## Technologies
 
