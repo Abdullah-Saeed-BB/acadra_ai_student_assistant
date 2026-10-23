@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.scripts]
+entrypoint = "src.api.app:main"
 mcp-server = "src.server:main"
 api-server = "src.api.app:main"
 gmail-poll = "src.jobs.gmail_poll:main"
