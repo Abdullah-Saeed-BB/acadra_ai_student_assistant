@@ -31,6 +31,9 @@ gmail-poll = "src.jobs.gmail_poll:main"
 dev = "src.dev:main"
 dev-servers = "src.dev:main"
 
+[tool.vercel]
+entrypoint = "src.api.app:app"
+
 [build-system]
 requires = ["hatchling>=1.26,<2"]
 build-backend = "hatchling.build"
