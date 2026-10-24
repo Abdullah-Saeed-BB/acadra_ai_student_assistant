@@ -36,3 +36,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+# Vercel must load the ASGI object directly; it must never run the local
+# uvicorn bootstrap in src/api/app.py:main (which binds 127.0.0.1:8001).
+[tool.vercel]
+entrypoint = "src.api.app:app"
