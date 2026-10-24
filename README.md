@@ -15,6 +15,9 @@ Acadra brings together academic information scattered across email, course mater
  - **Planning:** Tasks, one-level steps, selected days, and planning preferences power Today / Upcoming / Backlog views and drag reordering.
  - **Interfaces:** Alexa+ uses MCP tools/resources; the student web app uses REST endpoints that call the same services and database.
 
+#### Addtional content:
+ - [Friction Log](FRICTION_LOG.md)
+
 ## Technologies
 
 | Frontend | Backend | AI Models & Orchestration |
