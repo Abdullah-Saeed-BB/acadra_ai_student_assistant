@@ -30,7 +30,6 @@ api-server = "src.api.app:main"
 gmail-poll = "src.jobs.gmail_poll:main"
 dev = "src.dev:main"
 dev-servers = "src.dev:main"
-
 [build-system]
 requires = ["hatchling>=1.26,<2"]
 build-backend = "hatchling.build"
