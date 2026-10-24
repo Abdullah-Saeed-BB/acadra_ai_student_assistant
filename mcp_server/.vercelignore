@@ -1,0 +1,9 @@
+# Keep the deployment bundle to runtime code and dependencies.
+.venv/
+.uv-cache/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/uploads/
+tests/

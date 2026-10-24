@@ -19,7 +19,15 @@ from .mcp.tools.sources import register as register_sources
 from .mcp.tools.tasks import register as register_tasks
 
 settings = Settings.from_env()
-mcp = FastMCP("study_planner_mcp", host=settings.host, port=settings.port, debug=settings.debug)
+mcp = FastMCP(
+    "study_planner_mcp",
+    host=settings.host,
+    port=settings.port,
+    debug=settings.debug,
+    stateless_http=settings.stateless_http,
+    json_response=settings.json_response,
+    transport_security=settings.transport_security(),
+)
 
 # Register MCP tools
 register_manual_text(mcp)

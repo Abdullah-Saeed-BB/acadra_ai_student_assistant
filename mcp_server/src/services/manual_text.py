@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from hashlib import sha256
+import os
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -13,7 +14,23 @@ from src.connectors.manual import ManualTextEnvelope
 from src.db.schema import SourceDocument, SourceFile, SourceRevision
 from src.db.session import get_database_url
 
-UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "data" / "uploads"
+
+def _upload_root() -> Path:
+    """Resolve where original upload bytes are written.
+
+    Serverless hosts mount the project read-only and keep only /tmp writable,
+    so uploaded originals are ephemeral there. Database rows still carry the
+    logical storage reference; the extracted text is what remains durable.
+    """
+    configured = os.getenv("STUDY_UPLOAD_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    if os.getenv("VERCEL"):
+        return Path("/tmp/acadra/uploads")
+    return Path(__file__).resolve().parents[2] / "data" / "uploads"
+
+
+UPLOAD_ROOT = _upload_root()
 
 
 @dataclass(frozen=True)
@@ -42,7 +59,10 @@ async def save_manual_source(envelope: ManualTextEnvelope) -> ManualTextSaveResu
                 return result
             except Exception:
                 if result and result.file_storage_ref:
-                    await asyncio.to_thread((Path(__file__).resolve().parents[2] / result.file_storage_ref).unlink, missing_ok=True)
+                    await asyncio.to_thread(
+                        (UPLOAD_ROOT / Path(result.file_storage_ref).name).unlink,
+                        missing_ok=True,
+                    )
                 raise
     finally:
         await engine.dispose()
