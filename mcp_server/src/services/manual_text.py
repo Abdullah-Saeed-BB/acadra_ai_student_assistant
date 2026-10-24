@@ -3,16 +3,15 @@
 import asyncio
 from dataclasses import dataclass
 from hashlib import sha256
-import os
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.connectors.manual import ManualTextEnvelope
 from src.db.schema import SourceDocument, SourceFile, SourceRevision
+from src.db.session import get_database_url
 
 UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "data" / "uploads"
 
@@ -33,14 +32,7 @@ async def save_manual_text(envelope: ManualTextEnvelope) -> ManualTextSaveResult
 
 async def save_manual_source(envelope: ManualTextEnvelope) -> ManualTextSaveResult:
     """Save a manual source, serializing updates per document."""
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is required to save manual text.")
-    url = make_url(database_url)
-    if url.drivername not in {"postgresql", "postgresql+asyncpg"}:
-        raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL.")
-
-    engine = create_async_engine(url.set(drivername="postgresql+asyncpg"))
+    engine = create_async_engine(get_database_url())
     try:
         async with AsyncSession(engine, expire_on_commit=False) as session:
             result = None

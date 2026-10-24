@@ -11,13 +11,13 @@ import re
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.db.schema import (
     AcademicItem, AcademicItemChange, SourceDocument, SourceItemLink, SourceConnection, GmailIngestion,
     SourceProcessingRun, SourceRevision,
 )
+from src.db.session import get_database_url
 from src.ingestion.extraction import NormalizedCandidate, extract_academic_candidates
 
 
@@ -40,13 +40,7 @@ class SourceCandidateView:
 
 async def list_latest_source_candidates(document_id: UUID) -> list[SourceCandidateView] | None:
     """Read at most the latest revision's twelve extracted candidates."""
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is required to read source candidates.")
-    url = make_url(database_url)
-    if url.drivername not in {"postgresql", "postgresql+asyncpg"}:
-        raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL.")
-    engine = create_async_engine(url.set(drivername="postgresql+asyncpg"))
+    engine = create_async_engine(get_database_url())
     try:
         async with AsyncSession(engine) as session:
             document = await session.get(SourceDocument, document_id)
@@ -121,13 +115,7 @@ async def _source_authorized(session: AsyncSession, document: SourceDocument, re
 
 async def process_source_revision(revision_id: UUID) -> ProcessingResult:
     """Extract outside the transaction; atomically publish the resulting facts."""
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is required to process source text.")
-    url = make_url(database_url)
-    if url.drivername not in {"postgresql", "postgresql+asyncpg"}:
-        raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL.")
-    engine = create_async_engine(url.set(drivername="postgresql+asyncpg"))
+    engine = create_async_engine(get_database_url())
     started_at = datetime.now(timezone.utc)
     try:
         async with AsyncSession(engine) as session:

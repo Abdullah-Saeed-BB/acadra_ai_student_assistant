@@ -1,24 +1,17 @@
 """Single-user Gmail account configuration and credential reference storage."""
 
-import os
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.auth.credential_store import delete_gmail_refresh_token, save_gmail_refresh_token
 from src.db.schema import SourceConnection
+from src.db.session import get_database_url
 
 
 def _engine():
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is required for Gmail configuration.")
-    url = make_url(database_url)
-    if url.drivername not in {"postgresql", "postgresql+asyncpg"}:
-        raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL.")
-    return create_async_engine(url.set(drivername="postgresql+asyncpg"))
+    return create_async_engine(get_database_url())
 
 
 async def get_gmail_connection() -> SourceConnection | None:
