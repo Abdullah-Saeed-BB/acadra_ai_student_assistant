@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { AcadraLogo } from "@/components/acadra-mark";
 
@@ -161,6 +161,31 @@ type NavGroup = {
   items: NavItem[];
 };
 
+/**
+ * Lives inside a `<Link>` so `useLinkStatus` can report that navigation is in
+ * flight. The item's icon becomes a spinner and a slim progress bar appears at
+ * the top of the viewport, which stays visible after the mobile menu closes.
+ */
+function NavItemContents({ item }: { item: NavItem }) {
+  const { pending } = useLinkStatus();
+  const Icon = item.icon;
+
+  return (
+    <>
+      {pending ? <span className="nav-spinner" aria-hidden="true" /> : <Icon />}
+      <span className="nav-item-label">{item.label}</span>
+      {pending ? (
+        <>
+          <span className="sr-only" role="status">
+            Loading {item.label}
+          </span>
+          <span className="nav-progress" aria-hidden="true" />
+        </>
+      ) : null}
+    </>
+  );
+}
+
 const NAV_GROUPS: NavGroup[] = [
   {
     title: "Plan",
@@ -288,7 +313,6 @@ export function Sidebar() {
             <p className="nav-group-title">{group.title}</p>
             {group.items.map((item) => {
               const active = isActive(pathname, item.href);
-              const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
@@ -297,8 +321,7 @@ export function Sidebar() {
                   aria-current={active ? "page" : undefined}
                   title={item.label}
                   onClick={() => setOpen(false)}>
-                  <Icon />
-                  <span className="nav-item-label">{item.label}</span>
+                  <NavItemContents item={item} />
                 </Link>
               );
             })}

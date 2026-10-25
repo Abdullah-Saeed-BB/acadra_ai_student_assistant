@@ -272,6 +272,51 @@ a {
   color: var(--action-teal);
 }
 
+/* Navigation feedback: the clicked item's icon becomes a spinner, and a slim
+   bar tracks the top edge of the viewport until the route has painted. */
+.nav-spinner {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(10, 102, 94, 0.2);
+  border-top-color: var(--action-teal);
+  border-radius: 50%;
+  animation: nav-spin 650ms linear infinite;
+}
+
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--action-teal), var(--mint));
+  transform-origin: left center;
+  animation: nav-progress-grow 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes nav-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes nav-progress-grow {
+  0% {
+    transform: scaleX(0.04);
+  }
+  20% {
+    transform: scaleX(0.3);
+  }
+  60% {
+    transform: scaleX(0.6);
+  }
+  100% {
+    transform: scaleX(0.9);
+  }
+}
+
 /* Collapsible sidebar (desktop). Mobile keeps the Menu toggle above instead. */
 @media (min-width: 901px) {
   .sidebar-collapse {
