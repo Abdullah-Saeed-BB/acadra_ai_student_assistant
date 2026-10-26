@@ -568,40 +568,6 @@ Deterministic check (`normalize_candidate`, source text with/without “UTC”):
 - Optionally add a `uv run test` script that sets the right environment and prints a single summary.
 
 ---
-
-## What worked well
-
-The review was not only negative. These parts were stable and worth keeping:
-
-- **Integration tests:** all 10 backend tests passed in 25.6 s against PostgreSQL.
-- **REST validation:** `POST /api/academic-items` with a naive datetime returned a precise error (`due_at: Input should have timezone info`) instead of storing a wrong instant.
-- **Extraction speed and evidence:** a manual source processed in 19.9 s; the item kept a source revision, evidence quotes, `grade_weight_percent: 20`, `late_penalty: "10% per day"`, and review reasons. The extraction pipeline’s safety design is visible and inspectable.
-- **Review visibility:** the item page shows the review reason (`due_at: source evidence is missing`) and the source evidence, so the student can see *why* a record is uncertain — the page even shows the contradiction that F-01 describes.
-- **Alexa bridge truthfulness:** the assistant flagged the test item as “still marked as uncertain”, made no unsupported writes, and every write in the trace matched a real tool call. The claim verifier and capability-boundary prompt are doing their job.
-- **MCP surface:** 27 `study_*` tools were discovered; the bridge connected over Streamable HTTP on the first attempt and finished planning turns end to end.
-- **CRUD that works:** creating, updating, moving, completing, and deleting tasks works; deleting an academic item keeps its tasks and unlinks them; the web Today/Upcoming/Backlog/Inbox/Courses pages render real data.
-- **Data hygiene:** test rows could be removed deterministically; after cleanup the counts matched the pre-review snapshot exactly.
-
-## Recommended fix order
-
-| Order | Fix | Why first |
-| --- | --- | --- |
-| 1 | F-01 + F-11 | Every planning job depends on a stored deadline; fix the validator and give it one timezone. |
-| 2 | F-02 | The landing page currently tells a student with 24 open tasks that the day is free. |
-| 3 | F-03 | The headline “since I last checked” job is cheap to fix with one cursor and one default. |
-| 4 | F-04 + F-05 + F-06 | Build one deterministic planning layer that returns remaining effort, priority with reasons, and a budgeted plan. |
-| 5 | F-07 + F-08 | Source management and provider configuration are both about making the system explainable and operable. |
-| 6 | F-09 + F-10 + F-12 | Latency, docs, and dev-experience polish before the next demo. |
-
-## Not tested / limits
-
-- **Gmail:** no live Google OAuth, no mailbox import, no retry/expiry behavior. Findings rely on code inspection.
-- **File ingestion:** HTML/PDF upload limits and the PDF worker were not exercised this session.
-- **Deployment:** no Vercel deploy; serverless transport settings and the ephemeral upload path were not verified.
-- **Real Alexa+ hardware/client:** only the local simulator and `POST /api/alexa-chat` were used.
-- **UI rendering:** server-rendered HTML was inspected; the desktop was not available for screenshots. Interactive flows (dialogs, drag reorder) were tested through their APIs and code paths, not by clicking.
-- **LLM variance:** answers for F-03, F-05, and F-06 are single runs. The structural causes (no cursor, no scoring service, no budget check) are code-level and do not depend on the model’s wording.
-
 ## Cleanup
 
 The review created one manual source, one academic item, one change event, and moved one task to test completed-work totals. Cleanup:
