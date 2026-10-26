@@ -1,622 +1,703 @@
 # Acadra Friction Log
 
-**Date:** 2026-10-23  
-**Project:** Acadra — AI academic assistant for university students  
-**Workspace:** `C:\Projects\acadra`. The Git repository root is `app/`; after cloning, that root is the `acadra_ai_student_assistant/` folder containing `mcp_server/` and `web/`. In this wrapper workspace, the same folders appear as `app/mcp_server/` and `app/web/`.  
-**Reference:** Project proposal at `system/PROJECT_PROPOSAL.md`  
-**Prepared by:** Build session using OpenCode  
-**Scope:** End-to-end build and demo review of Acadra against the product proposal. Manual review prompts were read-only; the backend integration tests were also run and may have refreshed test preferences, but no source or task data was intentionally changed by the review prompts.
-
-This is a working friction log, not a bug bounty. It records the tasks attempted while running and reviewing Acadra, the gap between the proposal and the implementation, and the smallest changes that would remove the friction. Several entries are scope or documentation gaps rather than code defects; they are included because they affected the build/demo experience.
-
-## Severity scale
-
-| Severity | Meaning |
-| --- | --- |
-| Critical | Blocks the demo, loses data, or creates a security/privacy problem. |
-| High | A core student job or core source is unreliable, misleading, or missing; no clean in-product workaround. |
-| Medium | The core flow is possible, but requires a manual workaround or causes localized confusion. |
-| Low | Polish, documentation, or developer-experience issue with no functional impact. |
-
-## Investigation setup
-
-| Item | Value |
-| --- | --- |
-| OS | Windows |
-| Python | 3.12.5 |
-| uv | 0.9.28 |
-| Node | 24.18.0 |
-| npm | 11.16.0 |
-| Backend | FastMCP + Starlette + PostgreSQL |
-| Frontend | Next.js 16.3.8 |
-| Backend start | `uv run dev` (REST on 8001, MCP on 8000) |
-| Frontend start | `npm run dev` (port 3000) |
-| Database | Reachable; `SELECT 1` returned `1` |
-
-The backend and frontend were started locally and exercised through their real HTTP surfaces. The Alexa+ bridge was called through `POST /api/alexa-chat`; the frontend was built and linted. Secrets from `.env` were not printed or included in this document.
+| Item                | Value                                                                                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date                | 2026-10-26                                                                                                                                                                                                                                           |
+| Session             | 1 — live end-to-end pass                                                                                                                                                                                                                             |
+| Project             | Acadra — AI academic assistant for university students                                                                                                                                                                                               |
+| Scope               | The three headline student jobs — “what changed since I last checked”, “what is actually urgent”, and “a realistic plan for today” — plus setup, extraction, and source management. |
+| Severity Scale      | **Low** (annoyance, doesn't block work), **Medium** (slows down work, workaround exists), **High** (blocks progress)                                                                                                                                 |
+| Investigation setup | The product was run locally and exercised end to end through its real surfaces: the REST API, the MCP server, the Alexa+ bridge, and the web pages. The backend integration tests were also run.                                                     |
+| Notes               | This is the project’s first friction log, not a bug bounty. Entries that rely on code rather than a live run say so in a **Verification** line. Test records were cleaned up and the pre-review database counts restored (see [Cleanup](#cleanup)).  |
 
 ## Summary
 
-| ID | Task attempted | Area | Severity | Workaround |
-| --- | --- | --- | --- | --- |
-| F-01 | Follow the README to start both apps | Onboarding | Medium | Use `.env` and match the MCP port to the launch mode |
-| F-02 | Connect Gmail and import recent course mail | Gmail connector | High | Run the worker and wait for new mail, or upload manually |
-| F-03 | Turn a deadline into a plan and keep it current after a change | Planning | High | Ask Alexa to create/replan, or create tasks by hand |
-| F-04 | Check that Today respects my daily study limit | Planning | High | Ask Alexa for an overload check; move tasks manually |
-| F-05 | Ask what changed since I last checked | Inbox | Medium | Say “since yesterday” instead |
-| F-06 | Turn a course page into clean assignment records | Extraction | High | Review and correct records manually |
-| F-07 | Inspect the original source and its extracted candidates | Provenance | Medium | Call the candidates API directly |
-| F-08 | Connect the MCP server to a real Alexa+ client | Integration | High | Use the local simulator only |
-| F-09 | Pull Google Classroom data and plan around classes/work | Sources and availability | High | Upload sources manually and state constraints in chat |
-| F-10 | Ask Alexa to remove a duplicate task | Voice editing | Medium | Delete it on the web page |
-| F-11 | Open Connectors at the obvious URL and run lint | Frontend polish | Low | Use the sidebar link; warnings do not block |
+| ID   | Task attempted                                            | Area                 | Severity   | Workaround                                |
+| ---- | --------------------------------------------------------- | -------------------- | ---------- | ----------------------------------------- |
+| F-01 | Turn a pasted course announcement into a dated assignment | Extraction           | **High**   | Edit the due date by hand                 |
+| F-02 | Open Today and Upcoming and see what to do                | Planning / views     | **High**   | Scan All tasks for old dates              |
+| F-03 | Ask “what changed since I last checked?”                  | Inbox / Alexa        | **High**   | Name an explicit date                     |
+| F-04 | Check that plan totals mean *remaining* work              | Planning / views     | **Medium** | Subtract finished work mentally           |
+| F-05 | Ask “which assignment is actually the most urgent?”       | Priority / Alexa     | **Medium** | Ask it to compare specific items          |
+| F-06 | Ask for a plan inside a 45-minute gap                     | Alexa / planning     | **Medium** | Ask for one smaller task                  |
+| F-07 | Inspect or remove the source behind an item               | Provenance / sources | **Medium** | Delete the item; SQL to remove the source |
+| F-08 | Run extraction with a non-Groq provider                   | Configuration        | **Medium** | Keep Groq configured                      |
+| F-09 | Use the Alexa+ simulator as a voice assistant             | Alexa bridge         | **Medium** | Keep prompts short; retry the turn        |
+| F-10 | Follow docs and links from a clean checkout               | Documentation        | **Low**    | Read the code                             |
+| F-11 | Get the same “today” in the API and the bridge            | Time handling        | **Low**    | Pass the day explicitly                   |
+| F-12 | Run the test suite and read its result                    | Developer experience | **Low**    | Suppress stderr; ignore exit code         |
 
 ---
 
-## F-01 — Quick-start mixes `.env` and `.env.local`, and the MCP port depends on the launch mode
+## F-01 — A deadline is parsed and then thrown away by the evidence validator
 
-**Area:** Developer onboarding, environment configuration  
+**Area:** Ingestion / extraction, academic items
+**Severity:** High
+
+**Task attempted:** Paste a realistic course announcement and get an assignment record with a usable deadline, so the planner can schedule it.
+
+**Steps taken:**
+
+1. Posted this text to `POST /api/sources/text` (title: “FRICTION TEST – DB102 assignment announcement”):
+
+   > Databases (DB102) announcement. Assignment 2: SQL joins and aggregation is now available. It is due Friday 30 October 2026 at 23:59 and is worth 20% of your final grade. Submit it on Google Classroom. Late submissions lose 10% of the mark per day.
+
+2. Waited for extraction (`processing_status: processed`, 19.9 s, 1 item, `review_count: 1`).
+3. Read the created item and `GET /api/sources/{id}/candidates`.
+4. Reproduced the decision without the model by calling `normalize_candidate()` with three evidence variants.
+
+**Expected:** The deadline `2026-10-30 23:59` should be stored, or stored with an explicit review flag that keeps the parsed value visible, so the assignment can be scheduled and prioritised.
+
+**Actual:**
+
+- The item was created with `due_at: null`, `review_state: "uncertain"`, and review reason `due_at: source evidence is missing`.
+- The candidate **did** contain the parsed date: `date_facts.due_at.value = "2026-10-30T23:59"`, `precision: "datetime"`.
+- The validator compares the model’s evidence quote with the source text and requires a literal substring **and** a timezone token in that quote (`src/ingestion/extraction.py:232-260`). The model returned the normalized ISO value as evidence, so the literal check failed. A typical announcement with no stated timezone fails the timezone check even with perfect evidence.
+
+Deterministic check (`normalize_candidate`, source text with/without “UTC”):
+
+| Evidence quote supplied | Result |
+| --- | --- |
+| `Friday 30 October 2026 at 23:59` (literal, no timezone) | `due_at=None`, reason: `time zone is not in source evidence` |
+| `Friday 30 October 2026 at 23:59 UTC` (literal + timezone) | `due_at=2026-10-30 23:59:00+00:00`, no reasons |
+| `2026-10-30T23:59:00+00:00` (normalized, what the model returned) | `due_at=None`, reason: `source evidence is missing` |
+
+**Evidence:**
+
+- Live response: item `due_at: null`, `review_state: "uncertain"`; candidates include `"due_at": {"value": "2026-10-30T23:59", "precision": "datetime", "wording": "2026-10-30T23:59"}`.
+- `app/mcp_server/src/ingestion/extraction.py:232-260` (`_supported_evidence`, `_date_value`), `:288-289`, `:313-318`.
+- Item page (`/items/{id}`) renders “Due **No date**” directly above details that say “It is due Friday 30 October 2026 at 23:59”.
+
+**Impact:** The most important field in the product is dropped at the validation step, for the most common phrasing (“due Friday 30 October at 23:59”). Everything downstream inherits the gap: the item cannot be ranked as urgent, Today cannot plan backwards from the deadline, Upcoming cannot warn about a bad week, and the student must retype a date the system already understood. The assistant is put in the position of quoting the date from unstructured details while the record says “No date”.
+
+**Workaround used:** Edit the item’s **Due** field on the item page (the UI converts local time to an ISO instant correctly), or state the date explicitly to Alexa. For this review I read the value from `date_facts` and then removed the test source.
+
+**Actionable suggestion:**
+
+- Keep the parsed value when validation is uncertain: store `due_at` with a `precision` / `needs_review` flag instead of `NULL`, and mark the item for review. A date that is 90% right is more useful than no date, provided the UI labels it as unconfirmed.
+- Validate either form of evidence: accept a literal quote, or an ISO value that matches the parsed datetime, and keep the literal wording separately for the evidence panel.
+- Add a student timezone setting (see F-11) and use it for announcements that give a wall-clock time with no zone, instead of rejecting the date.
+- On the item page, show “Parsed: 30 Oct 2026, 23:59 — confirm” with one click, rather than an empty field.
+- Add unit tests for the four cases above: no timezone, date-only, normalized evidence, conflicting dates.
+
+---
+
+## F-02 — 24 overdue tasks are invisible on Today and Upcoming
+
+**Area:** Today / Upcoming, task plan semantics
+**Severity:** High
+**Task attempted:** Open the app on 2026-10-26 and see what to work on today and this week.
+
+**Steps taken:**
+
+1. `GET /api/plan/today`
+2. `GET /api/plan/upcoming?days=7`
+3. `GET /api/tasks?limit=100` and grouped the results by `selected_day`
+4. `GET /api/plan/overdue` (does not exist)
+5. Opened `/` and `/inbox`
+6. Later, asked Alexa to “Plan a light day for tomorrow” and inspected what it moved
+
+**Expected:** Unfinished work from previous days stays visible. A task should not become complete just because its selected day passed, and the Today/Upcoming views should surface outstanding old work so the student can reschedule it.
+
+**Actual:**
+
+- `/api/plan/today` → `{"day":"2026-10-26","total_estimated_minutes":0,"tasks":[]}`.
+- `/api/plan/upcoming?days=7` → seven days, every one `0` minutes.
+- `/api/tasks?limit=100` → **24 of 26** unfinished tasks are scheduled on 2026-10-19 … 2026-10-25. The other 2 are Backlog.
+- `/api/plan/overdue` → `404`.
+- The Today page says: “Nothing is planned for today yet.”
+- When Alexa moved the step “Write demonstration queries” to 2026-10-27, its parent “Database assignment: Restaurant database” stayed on 2026-10-23. `GET /api/tasks` then showed a step scheduled tomorrow whose parent is still overdue. In the Upcoming view, `task-group.tsx` groups tasks by parent only when the parent is in the same day’s list, so the step renders as a standalone card (code path: `app/web/components/task-group.tsx:36-49`).
+
+**Evidence:**
+
+- Plan responses above, captured 2026-10-26.
+- `app/mcp_server/src/api/app.py:121-123` registers only `today`, `upcoming`, and `backlog`; there is no overdue route.
+- `app/mcp_server/src/services/tasks.py:546-566`, `:569-596`: exact-day and forward-only queries.
+- `app/web/components/task-group.tsx:36-49`.
+
+**Impact:** A student who trusts the landing page believes the week is free while 24 obligations are unresolved. Alexa compounds it: with an empty Today plan, it falls back to the Backlog and recommends work that was never scheduled. The “bad week” warning cannot work on a view that starts today and ignores everything before it.
+
+**Workaround used:** Opened **All tasks** and read the dates manually. Asked Alexa about specific days. Moved nothing permanently.
+
+**Actionable suggestion:**
+
+- Add overdue semantics to the plan service: `GET /api/plan/overdue`, and include an `overdue` group or count in `/api/plan/today` and the Today page (“24 tasks are past their day — review”).
+- Decide the roll-over rule explicitly: show overdue work in Today by default, or show a banner with a one-click “move to today”; do not silently drop it.
+- When a step is moved, return its parent context in the response and keep the parent on the card (“step of: Database assignment”), with an option to move the whole assignment.
+- Start Upcoming at tomorrow and label it clearly, or keep today and document it; today currently appears in both Today and Upcoming.
+- Add a test seeded with past `selected_day` values and assert that `/api/plan/today` (or its overdue block) surfaces them.
+
+---
+
+## F-03 — “What changed since I last checked?” has no last-checked anchor
+
+**Area:** Inbox / change feed / Alexa context
+**Severity:** High
+
+**Task attempted:** Ask the headline job exactly: “What changed since I last checked?”
+
+**Steps taken:**
+
+1. `POST /api/alexa-chat` with that one user message.
+2. Inspected the returned `trace.steps[*].toolCalls`.
+3. `GET /api/changes?limit=24` and counted the real events.
+4. Read `app/web/app/inbox/page.tsx` and `src/mcp/tools/changes.py`.
+
+**Expected:** The answer covers the window since the student’s last visit and names that window, so the student does not have to open every course, announcement page, email thread, and calendar.
+
+**Actual:**
+
+- The bridge called `study_get_changes_since` with `{"since":"2026-10-26"}` — today. It reported one new item: “Since you last checked, one new item appeared: Assignment 2: SQL joins and aggregation … It’s still marked as uncertain.”
+- The database held **15** change events, dated 2026-10-22 and 2026-10-23.
+- There is no stored read cursor: `source_documents.last_seen_at` is ingestion time, not student read time. The Inbox always requests `listChanges("limit=50")` and `listAcademicItems("limit=20")` with no window.
+- `since` is optional in the tool schema, so the model had to invent an anchor; “today” is a reasonable guess and a wrong answer.
+
+**Evidence:**
+
+- Bridge trace: `study_get_changes_since` with `since: "2026-10-26"`; reply quoted above.
+- `app/web/app/inbox/page.tsx:83-85`.
+- `app/mcp_server/src/mcp/tools/changes.py:34-57`.
+- `app/mcp_server/src/db/schema.py:70` (`last_seen_at` belongs to source ingestion).
+
+**Impact:** The product answers its own headline question incorrectly and confidently. A student who checks once a week misses 14 of 15 changes. The wording “since you last checked” makes the wrong window sound authoritative.
+
+**Workaround used:** Asked “What changed since October 22?” and manually scanned the Inbox dates. The Inbox itself is useful; only the “last checked” anchor is missing.
+
+**Actionable suggestion:**
+
+- Store `last_checked_at` (per student, or per conversation if there is no auth yet) and update it when the Inbox opens or when a conversation starts.
+- Default `study_get_changes_since` and `GET /api/changes` to that cursor, and return `since` / `last_checked_at` in the response so Alexa can say “since your last visit on 23 October”.
+- Add an unread count to the Inbox and sidebar, plus a “mark all as read” action.
+- Add tests for the no-`since` path (must use the cursor) and the explicit-`since` path.
+
+---
+
+## F-04 — Plan totals count completed work, and the plan service never applies preferences
+
+**Area:** Planning / workload math
 **Severity:** Medium
 
-**Task attempted:** Follow `app/README.md` from a clean clone to start the backend and frontend, and connect the frontend to the MCP endpoint.
+**Task attempted:** Check that “today’s effort” and “upcoming workload” mean remaining work.
 
 **Steps taken:**
 
-1. Read `app/README.md` steps 1–8.
-2. Confirmed the repository root locally is `C:\Projects\acadra\app` (`git rev-parse --show-toplevel`). After cloning, that root is the `acadra_ai_student_assistant/` folder and contains `mcp_server/` and `web/`. Therefore `cd mcp_server` from the clone root and `cd acadra_ai_student_assistant\web` from a fresh terminal in the parent directory are valid commands.
-3. Compared step 7 with `app/web/.env.example` and the two backend entry points in `pyproject.toml`.
-4. Started the backend with `uv run dev` and the frontend with `npm run dev`.
+1. Moved a 60-minute task to 2026-10-27 (through Alexa) and read `/api/plan/upcoming?days=7`.
+2. Patched the task to `status: "done"` with `PATCH /api/tasks/{id}`.
+3. Read `/api/plan/upcoming?days=7` again.
+4. Reverted the task to `todo`.
+5. Read `get_today_plan`, `get_upcoming_plan`, and `services/preferences.py`.
 
-**Expected:** One environment file is created and edited, and the frontend’s `MCP_SERVER_URL` matches whichever backend command the README tells the reader to run. The backend serves REST on `127.0.0.1:8001` and MCP on `127.0.0.1:8000`; the frontend serves on `localhost:3000`.
-
-**Actual:**
-
-- Step 7 runs `Copy-Item .env.example .env`, then tells the reader to adjust `MANUAL_SOURCE_API_URL` and `MCP_SERVER_URL` in `.env.local`. The reader has an `.env`, not an `.env.local`. Next.js loads both, so this usually works, but the instruction disagrees with the command.
-- Two documented backend modes exist: `uv run dev` starts MCP on 8000 and REST on 8001; `uv run api-server` serves a combined REST and MCP app on 8001. `app/web/.env.example` defaults `MCP_SERVER_URL` to `http://127.0.0.1:8000/mcp`. A reader who chooses `api-server` without changing the URL gets a bridge that cannot connect, which the simulator renders as a fallback error.
-
-**Evidence:**
-
-- `app/README.md`, steps 5–7.
-- `app/mcp_server/src/dev.py`, `run_mcp()` and `run_api()`.
-- `app/mcp_server/src/api/app.py`, `app = mcp.streamable_http_app()` and `uvicorn.run(..., port=args.port)`.
-- `app/web/.env.example`, lines explaining the 8000/8001 port choice.
-
-**Impact:** The backend can start successfully while the frontend talks to the wrong port, which looks like a broken product rather than a configuration choice. The environment-file mismatch sends the reader to a file that the previous command did not create.
-
-**Workaround used:** Used `uv run dev`, kept the existing `.env` files, and pointed the frontend at `http://127.0.0.1:8000/mcp`. When using the combined `api-server` mode, the working value is `http://127.0.0.1:8001/mcp`.
-
-**Actionable suggestion:**
-
-- Update step 7 to say “edit `.env`” if that is the file being created, or change the copy command to create `.env.local`.
-- Make one backend start command canonical in the README. If both `dev` and `api-server` stay supported, derive `MCP_SERVER_URL` from the same configuration or show both matching pairs explicitly.
-- Add a startup log or health check that prints the MCP URL the frontend will use and verifies it before the simulator opens.
-- Add a clean-checkout smoke test that follows the README literally and checks the REST port, MCP port, and frontend port.
-
----
-
-## F-02 — Gmail import is implemented, but the UI says it is not; the first connection imports nothing
-
-**Area:** Gmail connector, ingestion UI, documentation  
-**Severity:** High
-
-**Task attempted:** Verify that connecting Gmail imports recent course assignments and announcements into Acadra.
-
-**Steps taken:**
-
-1. Read the connector card at `/connecters` and the form at `/connecters/gmail`.
-2. Traced the backend path in `app/mcp_server/src/jobs/gmail_poll.py`, `src/services/gmail_ingestion.py`, and `src/connectors/gmail.py`.
-3. Checked what `poll_once` does on its first run, before any `historyId` cursor exists.
-4. Compared the behavior with the Gmail bullet in the proposal and the worker instructions in the README.
-
-**Expected:** Per the proposal, Gmail is a core source: “Email — Via Gmail.” Connecting the account and saving permitted senders should start importing recent academic mail, or at least make the import status and its limitations visible.
+**Expected:** Completed work is excluded from remaining effort, or reported separately. Saved preferences (`preferred_daily_minutes: 150`, `focus_task_count: 4` in this database) are used to mark a day as over budget.
 
 **Actual:**
 
-- The connector card says: “Message import is not yet implemented.”
-- The form says the setup “does not fetch messages yet” and that other senders “will be skipped when import is added.”
-- A working worker exists: `uv run gmail-poll` imports future messages, stores durable retries, and advances a history cursor.
-- On first run, `poll_once` records the current mailbox position and returns `0` (“Initialized at the current mailbox position; watching for new messages”). It does not backfill existing messages.
-- After OAuth, the form says the sender list is “ready for the first import,” but nothing is imported until a new matching message arrives.
+- Before: 2026-10-27 → `60m`, one `todo` task.
+- After marking it done: 2026-10-27 → still `60m`, one `done` task.
+- `get_today_plan` and `get_upcoming_plan` filter only by `selected_day`; neither filters `status` (`src/services/tasks.py:558-563`, `:575-580`).
+- The task service does not import the preferences service (`grep` finds no `preferences` reference in `services/tasks.py`), so the 150-minute default has no effect on any plan endpoint.
 
 **Evidence:**
 
-- `app/web/app/connecters/page.tsx`, connector description.
-- `app/web/app/connecters/gmail/gmail-connection-form.tsx`, the “does not fetch messages yet” and “when import is added” copy.
-- `app/mcp_server/src/jobs/gmail_poll.py`, `poll_once` baseline branch and the one-minute loop.
-- `app/mcp_server/README.md` and `app/README.md`, Gmail worker instructions.
+- API responses above, captured 2026-10-26.
+- `app/mcp_server/src/services/tasks.py:546-596`.
+- `app/mcp_server/src/services/preferences.py` (storage only; consumers are the MCP tool and REST route).
 
-**Impact:** A new user connects Gmail, sees no data, and concludes the connector failed. The UI actively contradicts a working backend feature. For a demo, this is worse than a missing feature because it hides working functionality.
+**Impact:** The number on Today does not fall as the student works, so “remaining work” is overstated. Any warning about a bad week built on these totals will be wrong. The saved preference looks like it works (the Settings page accepts it) but changes nothing.
 
-**Workaround used:** The available workaround is to run the worker and wait for new mail, or upload a source manually. For this review I used existing data and inspected the worker path; I did not complete a live Google OAuth connection.
-
-**Actionable suggestion:**
-
-- Replace the “not implemented” copy with the real state: “Import worker: running/not running,” “Last checked,” and “Messages imported.”
-- Add an explicit initial lookback (for example, 7 or 30 days) with a page cap and a progress indicator, or add an “Import recent mail” button for the first connection.
-- Show rejected/skipped senders and the last poll result in the connector page.
-- Add an integration test that connects a seeded mailbox and verifies the first visible import, not only future-message ingestion.
-
----
-
-## F-03 — Deadlines do not become plans automatically, and source changes do not refresh existing plans
-
-**Area:** Planning pipeline, source processing, Gmail worker  
-**Severity:** High
-
-**Task attempted:** Trace what happens after an assignment is extracted with a deadline, then trace the same path after the deadline changes.
-
-**Steps taken:**
-
-1. Traced the extraction write path in `app/mcp_server/src/services/source_processing.py`.
-2. Checked what happens after a Gmail message is accepted in `src/services/gmail_ingestion.py` and `src/jobs/gmail_poll.py`.
-3. Searched the task service for any call triggered by an academic-item create or edit.
-4. Compared the observed path with the proposal’s “From Data To Insights” and “Keep the plan current” claims.
-
-**Expected:** Per the proposal:
-
-- “Convert every deadline into a recommended start date, milestone plan, estimated work blocks, and reminders.”
-- “New assignments, changed deadlines, moved classes, newly posted readings, and event announcements must update the plan automatically.”
-
-**Actual:**
-
-- Source processing creates or updates `AcademicItem` rows and writes `AcademicItemChange` events. It does not create or update `Task` rows.
-- Gmail ingestion queues and processes revisions; the poll worker only drives ingestion and extraction.
-- Existing tasks linked to an academic item are not recalculated when the item’s due date, weight, or details change.
-- There is no stale-plan flag, reminder row, or generated milestone plan. A user must ask Alexa to plan the work or create tasks manually on the web.
-
-**Evidence:**
-
-- `app/mcp_server/src/services/source_processing.py`, item creation and change-event blocks.
-- `app/mcp_server/src/jobs/gmail_poll.py`, the poll and processing loop.
-- `app/mcp_server/src/services/tasks.py`, task CRUD and plan views; there is no source-processing import or change-listener path.
-- `system/PROJECT_PROPOSAL.md`, “From Data To Insights” and “Keep the plan current.”
-
-**Impact:** The biggest proposed transformation — deadline to an actionable plan — remains a manual conversation. If a professor moves a deadline, the Inbox may show the edit while Today keeps the old plan. Students can act on stale dates, which is exactly the trust problem the proposal is trying to solve.
-
-**Workaround used:** The only product workaround is to create or adjust tasks manually, or ask Alexa to do it explicitly. I inspected both paths but did not mutate the demo data; no automatic plan refresh was available to test.
+**Workaround used:** Mentally subtracted finished tasks; did not rely on the total.
 
 **Actionable suggestion:**
 
-- Add a small planning service that converts an academic item into recommended work blocks and milestone tasks using due date, grade weight, remaining effort, lag, and preferences.
-- Call it from source publishing when a new item is created, and from item updates when a field that affects planning changes.
-- Keep completed steps; re-plan only unfinished work, and mark the plan “needs review” instead of silently moving work.
-- Expose the action through `POST /api/plan/generate` and an MCP tool such as `study_plan_academic_item`, with a dry-run option.
-- Add reminders as a separate table/worker if reminders remain in scope, or remove “reminders” from the MVP promise.
+- Return three numbers from plan endpoints: `planned_minutes`, `completed_minutes`, `remaining_minutes` (todo + in_progress). Display remaining as the headline and completed as progress.
+- Apply `preferred_daily_minutes` in the plan response (`over_budget_minutes`, `needs_rebalance`) and show a banner on Today.
+- Exclude `done` tasks from the plan cards by default, with a “show completed” toggle.
+- Add tests for a day that contains a done task and a todo task.
 
 ---
 
-## F-04 — Today’s effort ignores the daily preference and double-counts nested steps
+## F-05 — “What is actually urgent?” is a single LLM judgement, not a system calculation
 
-**Area:** Today/Upcoming plan views, preferences, Alexa answers  
-**Severity:** High
-
-**Task attempted:** Check that Today is a realistic plan that respects the saved daily workload preference and gives one consistent effort total.
-
-**Steps taken:**
-
-1. Read `GET /api/preferences` through the backend.
-2. Read `GET /api/plan/today`.
-3. Asked the Alexa simulator, “What is on my plan today? Keep it short.”
-4. Asked, “What is most urgent right now? Do not change anything. Keep it short.”
-5. Asked, “Will next week be a bad week for me? Do not change anything. Keep it short.”
-6. Read `get_today_plan`, `get_upcoming_plan`, the Today page, and the task grouping component.
-
-**Expected:** Per the proposal, the product should “surface a small intelligent ‘today’ plan, not dump the whole semester schedule,” and a realistic plan must account for available study time. A saved `preferred_daily_minutes` should either cap the plan, warn when the plan exceeds it, or clearly label the plan as over budget.
-
-**Actual:**
-
-- Preferences returned `preferred_daily_minutes: 150` and `focus_task_count: 4`.
-- `/api/plan/today` returned `total_estimated_minutes: 345` for one 240-minute parent task plus its 60-minute and 45-minute steps.
-- The Today page shows `345 min` without an over-limit warning.
-- Alexa answered “about 5.75 hours total” in one turn and “about 4 hours of work left” in another for the same plan. The first figure equals the API’s 345-minute sum; the second equals the 240-minute parent estimate alone.
-- `Upcoming` starts on today and includes today’s tasks, so the same work appears on both Today and Upcoming.
-- The plan service sums every task, including child steps, and never reads `planning_preferences`.
-
-**Evidence:**
-
-- `GET /api/preferences` → `150`, `4`.
-- `GET /api/plan/today` → `345`, with a 240-minute parent and 60- and 45-minute children.
-- `app/mcp_server/src/services/tasks.py`, `get_today_plan` and `get_upcoming_plan`: `sum(t.estimated_minutes or 0 for t in tasks)` with no preference lookup.
-- `app/web/app/page.tsx`, `const total = plan?.total_estimated_minutes ?? 0`.
-- `app/web/components/task-group.tsx`, nested steps rendered inside the parent.
-- Alexa replies from `POST /api/alexa-chat` on 2026-10-23.
-
-**Impact:** The student sees a plan that is more than twice their stated capacity, and the voice assistant gives two different totals for the same day. The nesting makes the total ambiguous: is the parent estimate a rollup that already includes its steps, or a separate block? Without an answer, neither the UI nor Alexa can be trusted on time.
-
-**Workaround used:** Asked Alexa for an overload check; it compared 345 minutes with the 150-minute preference. The web UI does not perform that comparison. I treated the parent task as a container and did not move data during the review.
-
-**Actionable suggestion:**
-
-- Decide and document effort semantics: either a parent estimate is a rollup and steps are excluded from the total, or a parent has its own effort and the UI must not nest the totals as if they were additive.
-- Return `root_total_minutes` and `step_total_minutes` separately from plan endpoints.
-- Make `get_today_plan` read `planning_preferences` and return `preferred_daily_minutes`, `over_preferred_minutes`, and a boolean `needs_rebalance`.
-- Show an overload banner on Today when the plan exceeds the preference, with a “move work” action.
-- Start Upcoming at tomorrow, or label it “7 days including today.”
-- Use the same server-side total in the Alexa reply and the web UI so both surfaces agree.
-
----
-
-## F-05 — “Since I last checked” has no last-checked state
-
-**Area:** Inbox, change feed, Alexa context  
+**Area:** Priority / Alexa reasoning
 **Severity:** Medium
 
-**Task attempted:** Ask exactly: “What changed since I last checked?”
+**Task attempted:** Ask “Which assignment is actually the most urgent right now, and why?”
 
 **Steps taken:**
 
-1. Sent the question through `/api/alexa-chat`.
-2. Inspected the returned agent trace and the tool arguments.
-3. Read the Inbox data loading and the change-feed tool.
+1. `POST /api/alexa-chat` with that question.
+2. Inspected the tool trace.
+3. Read the academic-item fields and the services that use `grade_weight_percent` / `late_penalty`.
 
-**Expected:** Per the proposal, “Tell me what changed since I last checked” should not require opening every course and announcement page. The product should remember, or ask for, the student’s last check and show only what is new since then, ideally with an unread count.
-
-**Actual:**
-
-- The bridge called `study_get_changes_since` with no `since` argument.
-- The reply mixed changes from October 20 and October 22 and then said “everything else is older.”
-- The Inbox always requests `listChanges("limit=50")` and `listAcademicItems("limit=20")`; it has no unread or last-checked marker.
-- No per-user read state is stored for the change feed. There is a source-level `last_seen_at` for ingestion, not an inbox read cursor.
-
-**Evidence:**
-
-- `POST /api/alexa-chat` trace: `study_get_changes_since` with empty arguments.
-- `app/web/app/inbox/page.tsx`, `listChanges("limit=50")`.
-- `app/mcp_server/src/mcp/tools/changes.py`, `since` is optional and defaults to no lower bound.
-- `app/mcp_server/src/db/schema.py`, source and planning tables; no per-user inbox read marker.
-
-**Impact:** The answer is useful but not actually “since I last checked.” A student cannot tell new items from old ones, and the Inbox has no unread signal. The feature works only when the student supplies a date.
-
-**Workaround used:** Asked “What changed since yesterday?” The trace then used `study_get_changes_since` with `{"since":"2026-10-22"}` and produced a correctly scoped answer. Manually scanned dates in the Inbox.
-
-**Actionable suggestion:**
-
-- Store `last_checked_at` per student, or per source/connection if the product wants a more granular inbox.
-- Default the Inbox to changes after `last_checked_at`, with a “show all” toggle.
-- Add an unread count and mark-as-read action to the Inbox and sidebar.
-- Let `study_get_changes_since` default to the student’s last check when `since` is omitted, and return `last_checked_at` in the response so Alexa can say what window it used.
-- Add a test for the no-`since` path and for an explicit `since` path.
-
----
-
-## F-06 — Course-page extraction produces noisy duplicates and loses dates and details
-
-**Area:** Ingestion, extraction, review workflow  
-**Severity:** High
-
-**Task attempted:** Turn a labeled course HTML page into clean assignment records with usable due dates.
-
-**Steps taken:**
-
-1. Ran the extraction quality check on the `html_01_assignment` dataset case:
-
-   ```powershell
-   .\app\mcp_server\.venv\Scripts\python.exe test\test_extraction_quality.py --case html_01_assignment --no-report
-   ```
-
-2. Compared the returned candidates with the seven expected records.
-3. Ran the smaller `email_01_assignment` case for contrast.
-
-**Expected:** Per the proposal, the extraction step should convert source text into a restricted, structured academic record with titles, dates, weights, and evidence. A course page should produce a small set of assignment records, not a noisy candidate dump.
+**Expected:** “Urgent” should reflect more than the nearest date: grade value, time required, dependencies, late penalties, and current workload should influence the answer.
 
 **Actual:**
 
-- `html_01_assignment`: 7 expected records, 22 candidates, precision `0.32`, recall `1.00`, F1 `0.48`.
-- Field pass rate: `details=0.14`, `due_at=0.57`.
-- Several expected dates were missing, including “Micro-quiz 1,” “Homework 1,” “Project 1,” “Project 2,” and “micro-Quiz 2.”
-- Duplicate or fragmented candidates appeared for project parts, for example “Project 1 … Part B,” “Project 2 … Part 2,” “Project 2 … Part 3,” and “Project 3 … First Review.”
-- Extra readings and an “unclassified” item were returned alongside the graded work.
-- `email_01_assignment` was cleaner but still returned 2 candidates for 1 expected record (F1 `0.67`).
-
-This is a labeled sample from the repository, not a production source. The point is the pipeline behavior on a representative course page, not a judgment about one student’s data.
+- The bridge made **one** tool call: `study_list_academic_items` with `item_type: "assignment"`, `limit: 50`.
+- Reply: “The most urgent one is ‘Programming assignments’ — it’s due Friday, October 30 … Everything else either has no due date yet or isn’t due until next year.”
+- It ranked by nearest known due date only. It did not read tasks, remaining effort, or workload, and it did not compare grade weight or late penalty.
+- The fields exist (`academic_items.grade_weight_percent`, `late_penalty`), and are returned by the item tools, but no service consumes them for ordering or scoring (`grep` across `src/` finds storage, serialization, and validation only).
+- 11 of the 13 academic items in this database have `due_at = NULL` (partly F-01), so they were excluded from the comparison entirely.
 
 **Evidence:**
 
-- The command output above, captured 2026-10-23.
-- Dataset: `test/dataset/html_01_assignment/expected.json` and `input.html`.
-- Extraction path: `app/mcp_server/src/ingestion/extraction.py` and `src/services/source_processing.py`.
+- Bridge trace: one round, `study_list_academic_items`, 16,075 tokens, 24.7 s.
+- Reply quoted above.
+- `app/mcp_server/src/db/schema.py:154-155` (fields); `src/services/academic_items.py` (CRUD only).
+- `app/mcp_server/src/services/tasks.py` (no ranking).
 
-**Impact:** The Inbox fills with duplicates and partial records, and the most important field for “what is urgent” — the due date — is missing on multiple assignments. The student must review and correct many records, which recreates the manual triage the product is supposed to remove. This is especially damaging for the trust promise: a missing date is less visible than a wrong date but just as harmful.
+**Impact:** “Urgent” means “earliest known date” and silently drops work with missing dates — which is the majority of records. Two runs can produce different answers because the ranking is model reasoning, not product logic. The distinction between “due soon” and “actually important” is not implemented as behavior.
 
-**Workaround used:** The intended workaround is the Inbox review/correction flow. For this review I compared the larger HTML case with the smaller email case and did not mutate data. The extraction pipeline itself ran successfully and produced evidence; the problem is precision and date recovery, not a crash.
+**Workaround used:** Asked for explicit comparisons and passed weights in the prompt. Results were plausible but not repeatable.
 
 **Actionable suggestion:**
 
-- Deduplicate candidates before publishing: normalize title, collapse “Part 1/2/3” and “Part A/B” into a parent record or an explicit step list.
-- Add a date-recovery pass that reads nearby date wording and fills `due_at` only when it is unambiguous; otherwise keep the item `uncertain` with a review reason.
-- Publish high-confidence records and hold the rest as candidates, with counts on the source page.
-- Add a minimum F1 gate per case to CI, not only an optional `--min-f1` flag.
-- Add “details present” and “due date present” as explicit quality metrics in the report.
+- Add a deterministic priority service: `study_get_priority_items(limit, horizon_days)` returning `score`, `rank`, and `score_components` (due proximity, grade weight, late penalty, remaining effort, dependency, workload).
+- Treat a missing due date as a risk factor, not as “not urgent”; include it with a “date unknown — review” label.
+- Include linked task effort in the item payload or the scoring service, so “time required” is real.
+- Have the bridge call the scoring tool for urgency questions instead of re-ranking in the prompt; keep the explanation in the tool response.
 
 ---
 
-## F-07 — Source evidence exists in the API but is a placeholder in the web UI
+## F-06 — A 45-minute study gap produces a 75-minute plan
 
-**Area:** Provenance, source detail, web navigation  
+**Area:** Alexa planning / time budget
 **Severity:** Medium
 
-**Task attempted:** Verify that a manual source submission can be followed to the original source, its revisions, and its extracted candidates.
+**Task attempted:** Ask for a study plan that fits a 45-minute gap: “Alexa, I have 45 minutes before my next class. What should I study?”
 
 **Steps taken:**
 
-1. Traced the `/sources/new` submission and read the response shape, which returns `source_document_id`.
-2. Looked for a link from the processing result to the source.
-3. Opened `/sources/{source_document_id}` and called `GET /api/sources/{source_document_id}/candidates` for an existing source.
-4. Checked the REST route inventory for a source list or detail endpoint.
+1. Sent exactly that message through `POST /api/alexa-chat`.
+2. Read the reply and added the suggested minutes.
+3. Inspected the tool trace.
 
-**Expected:** Per the proposal’s trust section, “all the data that are formatted on the system will always reference to the original sources,” and the user should be able to view the original source clearly. A source detail view should show revisions, extracted candidates, review states, and links to the academic items it produced.
-
-**Actual:**
-
-- The processing result lists item counts but has no link to the source.
-- `/sources/[source_document_id]` renders `PlannedView`, a branded placeholder; it does not fetch the source.
-- `GET /api/sources` returns `404`; the route inventory marks the source list and source detail endpoints as “No.”
-- The candidates endpoint exists at `GET /api/sources/{source_document_id}/candidates`, and item evidence exists at `GET /api/academic-items/{item_id}/evidence`, but the web app does not expose them together.
-
-**Evidence:**
-
-- `app/web/app/sources/[source_document_id]/page.tsx`, `PlannedView`.
-- `app/web/app/sources/new/source-entry-form.tsx`, processing results without a source link.
-- `app/mcp_server/src/api/app.py`, registered source routes.
-- `system/STRUCTURE_BACKEND.md`, REST endpoint inventory marking source list/detail as not done.
-
-**Impact:** A student or judge cannot follow the evidence trail from an extracted item back to the source page. The data exists, but the user-facing trust story is incomplete. Debugging extraction quality requires calling the API by hand.
-
-**Workaround used:** Called `/api/sources/{id}/candidates` directly for an existing source and used the item detail page’s evidence section for individual records. The API returns candidates, evidence, review reasons, and date facts; only the UI route is missing.
-
-**Actionable suggestion:**
-
-- Implement `GET /api/sources` and `GET /api/sources/{source_document_id}`.
-- Replace the source placeholder with a real detail view: revision history, candidate list with review states, and links to produced items.
-- Link the source ID from the processing result and from each item’s evidence section.
-- Add an “evidence” link on Inbox rows so the source trail is one click away.
-
----
-
-## F-08 — The MCP server is local-only; there is no checked-in path to a real Alexa+ client
-
-**Area:** Alexa+ integration, deployment, authentication  
-**Severity:** High
-
-**Task attempted:** Connect the study planner to a real Alexa+ client, or at least expose the MCP endpoint in a way an Alexa+ integration could reach.
-
-**Steps taken:**
-
-1. Read the proposal’s “MCP server to connect to Alexa+,” “Alexa+ Role,” and example conversation.
-2. Inspected `app/mcp_server/src/api/app.py` and the startup scripts.
-3. Checked the web app’s `/alexa+_simulator` and `/api/alexa-chat` path.
-4. Checked the repository structure and frontend for an Alexa skill manifest, public MCP endpoint, or authentication layer.
-
-**Expected:** Per the proposal, Alexa+ is the conversational controller between the student and the system. The MCP server should be connectable by the Alexa+ client, which implies a reachable, authenticated endpoint and an integration path.
+**Expected:** Suggestions total at most 45 minutes, chosen from what is actually due/urgent.
 
 **Actual:**
 
-- The API listens on `127.0.0.1:8001` and the MCP server on `127.0.0.1:8000` by default.
-- The README explicitly says there is no student authentication yet and the API must remain local.
-- The only conversational client is the local `/alexa+_simulator` page, which posts to `/api/alexa-chat`; the browser never reaches MCP directly.
-- No Alexa skill manifest, request/response adapter, or public deployment configuration is checked in.
-- The simulator is useful, but it is not evidence that a real Alexa+ client can reach and authenticate the server.
+- Reply: “You could spend the next 45 minutes tackling your backlog: start the ‘Write demonstration queries’ task for about 30 minutes, then finish the ‘Test and finalize submission’ task (30 minutes total) and use the remaining 15 minutes to continue the queries.”
+- The arithmetic is 30 + 30 + 15 = **75 minutes**, and the two items are Backlog steps, not today’s planned work. Today was empty (F-02).
+- Latency for this turn: 115.7 s (cold), 12,533 tokens, 3 rounds.
 
 **Evidence:**
 
-- `app/mcp_server/src/api/app.py`, `uvicorn.run(..., host="127.0.0.1", port=args.port)`.
-- `app/README.md`, the note that the backend has no student authentication and must stay on loopback.
-- `app/web/lib/mcp-client.ts`, the server-side MCP client and default URL.
-- `app/web/app/alexa+_simulator/`, the local simulator.
-- `system/PROJECT_PROPOSAL.md`, “MCP server to connect to Alexa+.”
+- Reply and trace above, captured 2026-10-26.
+- `app/web/lib/mcp-client.ts:930-980` (planning rules in the prompt; no budget enforcement).
+- `src/services/tasks.py` has no “plan for N minutes” operation.
 
-**Impact:** The core integration cannot be validated end to end. A demo that works only through the simulator may still be acceptable for a hackathon, but the proposal describes an Alexa+ product. Without a public, authenticated endpoint, the MCP server cannot be connected to a real Alexa+ client safely.
+**Impact:** The 45-minute scenario fails on its own constraint. In a real gap the student either starts too much or has to re-plan, which recreates the overload the product exists to remove.
 
-**Workaround used:** Used the local simulator and called `/api/alexa-chat` directly. Did not expose the loopback API or use a tunnel, because the API has no auth boundary.
+**Workaround used:** Asked for “one 30-minute task” and ignored the 30-minute overrun. No writes were made in this turn.
 
 **Actionable suggestion:**
 
-- If Alexa+ integration is in scope: add an authentication boundary, deploy the MCP endpoint over HTTPS, and check in the Alexa skill/manifest or adapter that connects to it.
-- If the simulator is the intended submission scope: say so explicitly in the README and proposal status, and label the simulator as the supported client.
-- Add `/health` and `/ready` endpoints so an external client can verify reachability before a conversation.
-- Add an integration test that starts the server, connects a client over the chosen transport, and lists the `study_*` tools.
+- Add a deterministic `study_plan_for_budget(minutes)` that selects tasks whose estimates sum within the budget (and respects the daily preference), returning the chosen tasks and `remaining_minutes`.
+- If the bridge keeps composing plans, pass the budget into the prompt as a hard constraint and post-check the sum against it before replying.
+- Prefer Today/overdue work before Backlog work in a time-gap answer.
+- Add a regression test that sums the minutes in the final reply and fails above the stated budget.
 
 ---
 
-## F-09 — Google Classroom and the time constraints needed for a “realistic” plan are absent
+## F-07 — Sources cannot be listed, opened, or deleted through the product
 
-**Area:** Source coverage, availability model, planning inputs  
-**Severity:** High
-
-**Task attempted:** Verify whether Google Classroom can be connected and whether the planner can generate a realistic plan around classes, a work shift, a commute, and sleep preferences.
-
-**Steps taken:**
-
-1. Read the proposal’s source list: Gmail, Google Classroom, and manual entry.
-2. Opened `app/mcp_server/src/connectors/classroom.py`.
-3. Checked the connector hub and the database schema for Classroom, calendar, work, commute, sleep, or availability concepts.
-4. Traced the inputs used by `get_today_plan` and the Alexa planning prompt.
-
-**Expected:** Per the proposal, Google Classroom is a core source, and a realistic today plan must “account for classes, work shifts, commute, sleep preferences, existing calendar events, and available study time.”
-
-**Actual:**
-
-- `connectors/classroom.py` contains only a docstring: “Reserved for a future Google Classroom connector.”
-- The connectors hub lists only Gmail.
-- The schema has sources, courses, academic items, tasks, and planning preferences; it has no calendar, class schedule, work shift, commute, sleep, or availability table.
-- The plan service reads tasks and selected days; preferences are stored but not applied by the plan endpoints.
-- Alexa can reason about constraints only if the student states them in the conversation; there is no durable availability context.
-
-**Evidence:**
-
-- `app/mcp_server/src/connectors/classroom.py`.
-- `app/web/app/connecters/page.tsx`, only the Gmail card.
-- `app/mcp_server/src/db/schema.py`, model list.
-- `app/mcp_server/src/services/tasks.py`, plan queries.
-- `system/PROJECT_PROPOSAL.md`, “Common Tools to Receive Uni Data” and “Give me a realistic plan for today.”
-
-**Impact:** The planner is a task list with a chat layer, not yet a realistic schedule. It cannot know that a student has class from 10:00–12:00, work from 16:00–22:00, or a 45-minute commute. A plan that ignores those constraints can recommend work at times the student cannot use.
-
-**Workaround used:** Manual source upload and stating constraints in the chat are the available workarounds. For this review I used existing data and code inspection; I did not connect a live Classroom account or rely on the planner to discover a routine.
-
-**Actionable suggestion:**
-
-- Implement the Classroom connector or remove it from the MVP source list and mark it as future work.
-- Add availability windows (class, work, commute, sleep) and, if possible, calendar import.
-- Include availability in the plan response and in the planning prompt; ask for missing constraints instead of assuming a free day.
-- Add a `PUT /api/availability` endpoint and an MCP read so Alexa can persist and use the student’s routine.
-
----
-
-## F-10 — Alexa refuses to delete or merge, while the web UI can delete
-
-**Area:** Voice editing, capability boundaries, task management  
+**Area:** Provenance / source management
 **Severity:** Medium
 
-**Task attempted:** Ask Alexa to remove one of two duplicate tasks, a natural request when the Inbox contains duplicates from extraction.
+**Task attempted:** Follow an extracted item back to its original source, and remove a bad test upload.
 
 **Steps taken:**
 
-1. Sent a hypothetical request through `/api/alexa-chat`: “If I had two duplicate tasks, could you delete one of them for me?”
-2. Inspected the tool trace and the system prompt.
-3. Checked the web task actions and the MCP task tools.
+1. `GET /api/sources`
+2. `GET /api/sources/{source_document_id}`
+3. `DELETE /api/sources/{source_document_id}`
+4. Opened `/sources/{source_document_id}`
+5. Read `src/services/sources.py`, `src/api/app.py`, and the MCP source tools.
+6. After the review, removed the test source directly in PostgreSQL.
 
-**Expected:** The voice assistant and the web UI should expose a coherent set of task operations. If Alexa cannot delete, it should say so and point to the web action, or offer a supported alternative with clear confirmation.
+**Expected:** A student or judge should be able to open the source, see its revisions/candidates, and remove a mistaken upload, so every extracted record can be traced back to the material that produced it.
 
 **Actual:**
 
-- Alexa replied: “I can't delete tasks, so I'd leave both duplicates as they are. If you'd like, I can update one of them instead, like renaming it or moving it to a different day.”
-- The trace contained no tool calls, which is the intended safe behavior.
-- `CHAT_SYSTEM_PROMPT` explicitly says the planner has no delete or merge tool and forbids emulating one.
-- The web task card has a delete button and `DELETE /api/tasks/{task_id}` exists.
+- `GET /api/sources` → `404`.
+- `GET /api/sources/{id}` → `404`.
+- `DELETE /api/sources/{id}` → `404`.
+- `/sources/{source_document_id}` renders `PlannedView` (a branded placeholder).
+- The MCP server has read-only `study_list_sources` / `study_get_source_detail`, and the candidates/evidence endpoints work; there is no delete in any layer.
+- Removing one test source required direct SQL across six tables because there are no cascades: `academic_item_changes`, `source_item_links`, `source_processing_runs`, `academic_items`, `source_revisions`, `source_documents` (plus restoring the moved task).
 
 **Evidence:**
 
-- The simulated conversation on 2026-10-23.
-- `app/web/lib/mcp-client.ts`, capability-boundary prompt.
-- `app/mcp_server/src/mcp/tools/tasks.py`, no delete tool.
-- `app/web/components/task-actions.tsx` and `app/web/app/api/tasks/[task_id]/route.ts`, web deletion.
+- Status codes above, 2026-10-26.
+- `app/web/app/sources/[source_document_id]/page.tsx:1-15` (`PlannedView`).
+- `app/mcp_server/src/api/app.py:99-102` (only text/file intake and candidates).
+- `app/mcp_server/src/db/schema.py` (foreign keys without `ondelete`).
 
-**Impact:** Duplicates are common after extraction, and “remove one” is exactly the cleanup the student wants. The refusal is truthful and safe, but it creates a capability split: the web can delete, voice cannot. The assistant could at least offer “delete it from the task page” with a link.
+**Impact:** A mistaken upload or an extraction experiment stays in the database forever, and the web app has no way to audit the source trail that the trust story depends on. Demo databases accumulate junk. Cleaning up requires database access, which a student never has.
 
-**Workaround used:** The web delete button and `DELETE /api/tasks/{task_id}` are available; I verified both but did not delete demo data. Non-destructive updates and moves work through Alexa.
+**Workaround used:** Deleted the produced academic item via `DELETE /api/academic-items/{id}` (this works), then removed the source rows with SQL and verified the original row counts.
 
 **Actionable suggestion:**
 
-- If deletion is in scope, add `study_delete_task` with an explicit confirmation argument and an audit trail; if it is out of scope, keep the refusal but add a deep link to the web task.
-- Document the voice/web capability split in the README and the simulator help text.
-- Add a merge operation only if the data model supports it; otherwise offer “keep one, mark the other done” as an explicit, clearly labeled choice, not as a silent workaround.
-- Add a regression test that forbids using completion or review-state changes to simulate deletion.
+- Implement `GET /api/sources` and `GET /api/sources/{source_document_id}` (services already exist for MCP), and replace the placeholder page.
+- Add `DELETE /api/sources/{source_document_id}` with either a soft delete (`archived_at`) or a transactional cascade; report how many items/revisions/links were removed.
+- Link the source from the item evidence panel and from the Inbox change row.
+- Add the source list and detail to the “REST endpoint inventory” as done when they land.
 
 ---
 
-## F-11 — Connectors route is misspelled, and lint warnings remain
+## F-08 — “Any AI provider you prefer” fails the Groq-only ingestion gate
 
-**Area:** Frontend routing, developer polish  
+**Area:** Configuration / extraction
+**Severity:** Medium
+
+**Task attempted:** Run extraction with the provider configured in `.env` when it is not Groq, as the README allows.
+
+**Steps taken:**
+
+1. Read `app/README.md`: “**Groq API key** _(Or any AI provider you prefer)_ for extraction and the Alexa+ bridge”.
+2. Read the provider switch in `src/ingestion/extraction.py:190-219` (supports `openrouter` and OpenAI-compatible endpoints).
+3. Read the configuration check in `src/services/source_processing.py`.
+4. Compared with `MODEL_PROVIDER` in `.env.example`.
+
+**Verification:** code path only; I did not run extraction with an alternate provider key.
+
+**Expected:** The “configured” check follows `MODEL_PROVIDER`: OpenRouter with `OPENROUTER_API_KEY` is a valid setup, and extraction either runs or reports a provider-specific error.
+
+**Actual:**
+
+- `src/services/source_processing.py:147` hard-codes:
+  `if not os.getenv("GROQ_API_KEY") or os.getenv("GROQ_API_KEY") == "API_KEY": return ProcessingResult("pending_configuration", [])`.
+- With `MODEL_PROVIDER=openrouter` and a valid `OPENROUTER_API_KEY` but no Groq key, every manual source returns `pending_configuration` even though `extract_academic_candidates` would work.
+- The message does not name the missing key or the provider, so the cause is not visible in the UI.
+
+**Evidence:**
+
+- `app/mcp_server/src/services/source_processing.py:147-148`.
+- `app/mcp_server/src/ingestion/extraction.py:190-219`.
+- `app/README.md:33`, `app/mcp_server/.env.example:11-14`.
+
+**Impact:** A supported configuration looks broken. Anyone evaluating with an OpenAI/OpenRouter/DeepSeek key hits a dead end and may conclude extraction is unimplemented.
+
+**Workaround used:** Kept Groq configured for this review. (`MODEL_PROVIDER=groq` with a real `GROQ_API_KEY` works.)
+
+**Actionable suggestion:**
+
+- Add a shared `model_config.is_configured()` that reads `MODEL_PROVIDER` and checks the matching key; use it in source processing, Gmail ingestion, and the bridge.
+- Return the provider and the missing variable name in `pending_configuration` (“Set OPENROUTER_API_KEY or switch MODEL_PROVIDER”).
+- Add one integration test per provider that asserts `pending_configuration` only when that provider’s key is missing.
+
+---
+
+## F-09 — The Alexa+ bridge takes 15–116 seconds per turn
+
+**Area:** Alexa bridge / performance
+**Severity:** Medium
+
+**Task attempted:** Use `/alexa+_simulator` as a stand-in for a voice assistant across four realistic asks.
+
+**Steps taken:**
+
+1. Sent four prompts through `POST /api/alexa-chat` and recorded wall-clock time and token usage from the trace.
+2. Counted the discovered tools and the prompt tokens in the first round.
+
+**Expected:** A conversational answer in a few seconds, suitable for voice.
+
+**Actual:**
+
+| Prompt | Wall time | Total tokens | Rounds |
+| --- | --- | --- | --- |
+| “I have 45 minutes before my next class. What should I study?” (cold) | 115.7 s | 12,533 | 3 |
+| “What changed since I last checked?” | 15.4 s | 18,010 | 2 |
+| “Plan a light day for tomorrow.” | 98.4 s | 42,148 | 5 |
+| “Which assignment is actually the most urgent right now, and why?” | 24.7 s | 16,075 | 2 |
+
+- The bridge discovers 27 `study_*` tools and sends all their schemas on every round; a simple Today read used 3,861 prompt tokens in round 1.
+- `MAX_TOOL_ROUNDS = 10` (`app/web/lib/mcp-client.ts:928`); “Plan a light day” used five rounds, including a full task read.
+- The dev-server log shows the dominant cause of the worst turns: the primary OpenRouter model failed repeatedly, and the retry budget (60 s per attempt, up to 3) stretched individual rounds to 40–72 s. For example, one round logged three failed attempts (cumulative 40.3 s) before the Groq fallback answered in 6.3 s; another spent 60.0 s on a timeout and 5.9 s on the successful retry (cumulative 65.9 s). The 98.4 s turn’s fourth round took 72.1 s, of which 57.9 s was the failed first attempt. `completeChat` allows `MODEL_MAX_RETRIES + 1` attempts per round (60 s timeout each), and a turn can contain several rounds (`app/web/lib/mcp-client.ts:1091-1214`).
+- The trace keeps only the model that answered (`trace.model` changes on fallback), so the returned `trace.steps` shows success and hides the failed attempts; the failures are visible only in the Next.js server console.
+
+**Evidence:**
+
+- Timings and traces above, 2026-10-26.
+- `app/web/lib/mcp-client.ts:422-456` (every tool schema is sent each round), `:1091-1214` (retry loop and per-attempt timeout), `:928`.
+- Next.js dev log, 2026-10-26: `chat-completions network error (attempt 1/3) … fetch failed`, `request timed out after 60000ms`, `failed; trying the next configured provider`.
+
+**Impact:** A real Alexa+ turn has a short timeout, and a 2-minute turn feels broken even in the simulator. Provider instability plus a 60 s × 3 retry budget means a single bad round can consume the whole voice window; the trace then reports success, so the demo looks fine while the user waited two minutes. Multi-round planning and the 27-tool payload multiply both latency and cost.
+
+**Workaround used:** Kept prompts short, retried the turn when the provider failed, and read the trace instead of waiting on the UI.
+
+**Actionable suggestion:**
+
+- Record every attempt in the trace (`provider`, `model`, `attempt`, failure reason) so a green-but-slow turn is explainable in the UI.
+- Use a short per-attempt timeout (10–15 s) and a total turn deadline for voice; answer with a spoken fallback instead of stretching to 180 s.
+- Route tools by intent instead of exposing all 27 on every turn (read-only planning tools for plan questions, write tools only when a change is requested), or add a compact `study_get_context` aggregate for the common questions.
+- Trim tool descriptions/schemas for the model call (keep the full descriptions in MCP for other clients).
+- Cap planning rounds at 3–5 and return a partial result instead of exhausting the budget.
+- Show elapsed time per turn in the trace panel (tokens are already shown) so regressions are visible.
+- Add a smoke test that asserts a plan read completes under a few seconds on a warm server.
+
+---
+
+## F-10 — Documentation drift: broken links, wrong paths, stale behavior notes
+
+**Area:** Documentation / onboarding
 **Severity:** Low
 
-**Task attempted:** Open the Connectors page at the URL a user would naturally try, then run the frontend checks.
+**Task attempted:** Follow the repository docs from a clean checkout and navigate between the structure guides.
 
 **Steps taken:**
 
-1. Requested `/connectors` and `/connecters`.
-2. Ran `npm run lint`.
-3. Ran `npm run build`.
+1. Opened every relative link in `system/STRUCTURE.md`, `system/STRUCTURE_BACKEND.md`, and `system/STRUCTURE_FRONTEND.md`.
+2. Followed `app/README.md` steps 3–8.
+3. Compared `app/mcp_server/.env.example` with the files it names.
+4. Compared the frontend fallback description with `alexa-transport.ts`.
+5. Tried `/connectors` and `/connecters`.
 
-**Expected:** The route matches the navigation label “Connectors,” and the project is lint-clean.
+**Expected:** Links resolve, commands match the tree, and behavior notes match the code.
 
 **Actual:**
 
-- `/connectors` → `404`; `/connecters` → `200`.
-- The sidebar and connector links consistently use `/connecters`, so the app works, but the misspelling is visible in the URL and in every internal link.
-- `npm run lint` reports three warnings:
-  - `requestFromBridge` is defined but never used in `app/alexa+_simulator/alexa-transport.ts`.
-  - `Link` is imported but unused in `app/connecters/gmail/page.tsx`.
-  - `Link` is imported but unused in `app/sources/new/page.tsx`.
-- `npm run build` succeeds, so none of this blocks the demo.
+- `system/STRUCTURE.md:16`, `STRUCTURE_BACKEND.md:3,7,127`, and `STRUCTURE_FRONTEND.md:3,86` link to `Others/Acadra - Amazon Hackathon/Project/system/...`. There is no `system/Others` directory; the documents are directly in `system/`.
+- `app/mcp_server/.env.example:35` says `db/db_init.py`; the file is `db/init_db.py`.
+- `app/README.md:78` says `cd acadra_ai_student_assistant\web`; the web app is `app/web` in this checkout, and step 3 already changed into `mcp_server`.
+- `app/web/.env.example:13` sets `MCP_SERVER_URL=http://127.0.0.1:8000/mcp`, while the comment above it says the default is `8001` and `lib/mcp-client.ts:28` defaults to `8001`. Both work with `uv run dev`, but only `8001` works with `uv run api-server`.
+- `STRUCTURE_FRONTEND.md:82` says the simulator falls back to “scripted replies”; `app/web/app/alexa+_simulator/alexa-transport.ts:19-24` returns a short apology and explicitly has no scripted domain answers.
+- `/connectors` → `404`; `/connecters` → `200`. The misspelling is consistent across the sidebar and docs.
+- `app/README.md:19` links to `FRICTION_LOG.md`; that file did not exist before this log (now resolved).
 
 **Evidence:**
 
-- `/connectors` → `404`, `/connecters` → `200` on 2026-10-23.
-- `npm run lint` output: 0 errors, 3 warnings.
-- `npm run build`: 25 routes generated successfully.
+- Broken links enumerated above; `Test-Path system/Others` → `False`.
+- `app/README.md:40-45,78`; `app/mcp_server/.env.example:35`.
+- `app/web/.env.example:5-13`; `app/web/lib/mcp-client.ts:28`.
+- `system/STRUCTURE_FRONTEND.md`; `app/web/app/alexa+_simulator/alexa-transport.ts`.
 
-**Impact:** Low: the sidebar works, and the warnings do not block the build. The misspelling is a credibility issue in a demo URL, and unused imports add noise for contributors.
+**Impact:** Each item is small; together they cost a new contributor 10–20 minutes of guessing, and the broken structure links make the main navigation between backend/frontend docs fail exactly when someone needs it.
 
-**Workaround used:** Used the sidebar and `/connecters`. Ignored the warnings for runtime testing.
+**Workaround used:** Read `system/` directly and used `uv run dev` with `MCP_SERVER_URL` on 8000.
 
 **Actionable suggestion:**
 
-- Add a permanent redirect from `/connectors` to `/connecters` now, and rename the route to `/connectors` when the internal links can be updated together.
-- Remove the unused `Link` imports and the dead `requestFromBridge` helper, or wire the helper into the transport.
-- Run `npm run lint` in CI and make warnings fail the check once the tree is clean.
+- Fix the `Others/...` links to sibling paths in `system/`.
+- Correct `db_init.py` → `init_db.py` and the `app/README.md` web path.
+- Pick one canonical backend command (`uv run dev`) and make the sample `MCP_SERVER_URL` match it; mention the `api-server` alternative explicitly.
+- Rename the route to `/connectors` with a permanent redirect from `/connecters`, or accept the spelling and remove “Connectors” from copy.
+- Add a link-check step (or a small test) for Markdown files in CI.
+
+---
+
+## F-11 — “Today” depends on which process asks, and Upcoming has no timezone input
+
+**Area:** Time handling / API consistency
+**Severity:** Low
+
+**Task attempted:** Confirm that the API and the Alexa bridge agree on what day “today” is.
+
+**Steps taken:**
+
+1. Read `get_today_plan` and `get_upcoming_plan`.
+2. Read `currentDateLine()` in the bridge.
+3. Read the plan routes and preferences schema.
+
+**Verification:** code path; every process ran in the same timezone here, so the mismatch was not triggered.
+
+**Expected:** One student timezone drives “today”, “tonight”, and “tomorrow” everywhere.
+
+**Actual:**
+
+- `get_today_plan(day=None, timezone_name=None)` accepts a timezone and otherwise uses the backend host’s local date (`src/services/tasks.py:546-556`).
+- `get_upcoming_plan(days, start_day=None)` has no timezone parameter and also uses the host date (`:569-573`).
+- The bridge builds “Today is …” from the Next.js server’s local clock (`app/web/lib/mcp-client.ts:720-739`).
+- There is no student timezone in preferences or configuration. If the backend, the Next.js server, and the student are in different zones, the API and the assistant can disagree by a day; so can two deployments.
+- `study_get_today_plan` exposes `timezone` to the model, but the model had no reason to pass it, and `study_get_upcoming_plan` cannot.
+
+**Evidence:**
+
+- `app/mcp_server/src/services/tasks.py:546-573`.
+- `app/web/lib/mcp-client.ts:720-739`.
+- `app/mcp_server/src/db/schema.py:250-256` (`planning_preferences` has no timezone).
+
+**Impact:** Low in a single-machine demo, but the failure is silent and looks like a data bug (“my task disappeared”). A student travelling or a server running in UTC will see the wrong day.
+
+**Workaround used:** Kept every process on the same machine and passed explicit `day` values when testing.
+
+**Actionable suggestion:**
+
+- Add `timezone` to planning preferences (default `UTC` or the account’s zone) and a single resolver used by all plan services and the bridge prompt.
+- Add `timezone`/`day` to the upcoming and backlog responses so clients can label them.
+- Include the resolved timezone in `study_get_today_plan` and `study_get_upcoming_plan` responses.
+
+---
+
+## F-12 — Debug mode leaks into tests, and a PowerShell pipe makes a passing run look failed
+
+**Area:** Developer experience
+**Severity:** Low
+
+**Task attempted:** Run the backend integration suite and read the result.
+
+**Steps taken:**
+
+1. Ran `uv run python -m unittest tests.test_mcp_server`.
+2. Ran it again with `2>$null` and checked `$LASTEXITCODE`.
+3. Read `src/server.py` and `src/config.py`.
+
+**Expected:** A clean pass/fail result.
+
+**Actual:**
+
+- The suite passes: `Ran 10 tests in 25.610s / OK`, exit code `0` when stderr is suppressed.
+- The run emits pages of asyncio debug logs (`Executing <Task …> took 0.7 seconds`, `_ProactorReadPipeTransport._loop_reading`) because the local `.env` sets `STUDY_MCP_DEBUG=True`, and `src/server.py:22` passes it to `FastMCP(..., debug=settings.debug)`.
+- Piping with `2>&1 | Select-Object` (a natural PowerShell move) makes PowerShell report exit code `1` and a `NativeCommandError` even though the tests passed.
+- `Settings.from_env` defaults `debug` to `"True"` when the variable is unset (`src/config.py:24`), while the Pydantic model default is `False` (`:15`). A checkout without `.env` therefore runs in debug mode, including `reload=True` for uvicorn.
+
+**Evidence:**
+
+- Test output and exit codes above.
+- `app/mcp_server/src/server.py:21-22`; `src/config.py:15,24`; `app/mcp_server/.env` (local, not committed).
+
+**Impact:** A developer sees “Exited with code 1” after a green test run and starts debugging the wrong thing. Debug logging also makes CI output unreadable.
+
+**Workaround used:** Re-ran with stderr suppressed and checked `$LASTEXITCODE`; the tests are healthy.
+
+**Actionable suggestion:**
+
+- Do not enable FastMCP/asyncio debug in tests: read debug settings lazily in `main()`, or set `STUDY_MCP_DEBUG=False` in the test command/environment.
+- Make the default consistent: `Settings.from_env` should default to `False`, matching the model and `.env.example`.
+- Document the Windows/PowerShell invocation (`cmd /c "uv run python -m unittest …"` or check `$LASTEXITCODE`) in the README.
+- Optionally add a `uv run test` script that sets the right environment and prints a single summary.
 
 ---
 
 ## What worked well
 
-The review was not only negative. The following parts were stable and worth keeping:
+The review was not only negative. These parts were stable and worth keeping:
 
-- **Backend integration tests:** `uv run python -m unittest tests.test_mcp_server -v` passed all 10 tests in 21.9 seconds.
-- **Frontend production build:** `npm run build` completed successfully and generated 25 routes.
-- **MCP surface:** The `study_*` tools and resources are registered and discoverable; task CRUD, plan views, courses, items, changes, preferences, sources, and Gmail operator tools are present.
-- **Alexa bridge:** The simulator called the right read tools for plan, changes, and urgency questions; responses arrived in roughly 3.7–11.3 seconds in this environment. Read-only prompts stayed read-only.
-- **Truthfulness guard:** The bridge has a claim verifier and a capability-boundary prompt; when asked to delete a duplicate, it refused instead of pretending to delete it.
-- **Extraction pipeline:** Manual text, HTML, and PDF ingestion run end to end; evidence and review states are persisted; Gmail ingestion has cursor, retry, and lease handling.
-- **Inbox and course UI:** The change feed, academic item detail, course board, task views, and preferences form are functional; the remaining gaps are about semantics, source visibility, and automatic planning rather than broken CRUD.
+- **Integration tests:** all 10 backend tests passed in 25.6 s against PostgreSQL.
+- **REST validation:** `POST /api/academic-items` with a naive datetime returned a precise error (`due_at: Input should have timezone info`) instead of storing a wrong instant.
+- **Extraction speed and evidence:** a manual source processed in 19.9 s; the item kept a source revision, evidence quotes, `grade_weight_percent: 20`, `late_penalty: "10% per day"`, and review reasons. The extraction pipeline’s safety design is visible and inspectable.
+- **Review visibility:** the item page shows the review reason (`due_at: source evidence is missing`) and the source evidence, so the student can see *why* a record is uncertain — the page even shows the contradiction that F-01 describes.
+- **Alexa bridge truthfulness:** the assistant flagged the test item as “still marked as uncertain”, made no unsupported writes, and every write in the trace matched a real tool call. The claim verifier and capability-boundary prompt are doing their job.
+- **MCP surface:** 27 `study_*` tools were discovered; the bridge connected over Streamable HTTP on the first attempt and finished planning turns end to end.
+- **CRUD that works:** creating, updating, moving, completing, and deleting tasks works; deleting an academic item keeps its tasks and unlinks them; the web Today/Upcoming/Backlog/Inbox/Courses pages render real data.
+- **Data hygiene:** test rows could be removed deterministically; after cleanup the counts matched the pre-review snapshot exactly.
 
 ## Recommended fix order
 
 | Order | Fix | Why first |
 | --- | --- | --- |
-| 1 | F-01, F-02 | A new user must be able to start the app and see Gmail work without environment/port confusion or contradictory docs. |
-| 2 | F-08 | Decide whether the submission is a simulator demo or a real Alexa+ integration; this affects the demo story and security scope. |
-| 3 | F-03, F-04 | The core promise is an actionable, realistic plan. Today must be consistent and deadline changes must propagate. |
-| 4 | F-06, F-07 | The plan is only as good as the extracted records and the evidence trail. |
-| 5 | F-05 | “What changed since I last checked” needs state, not just a feed. |
-| 6 | F-09 | Classroom and availability are large scope items; implement or explicitly defer them. |
-| 7 | F-10, F-11 | Polish the voice/web capability split and the route/lint issues. |
+| 1 | F-01 + F-11 | Every planning job depends on a stored deadline; fix the validator and give it one timezone. |
+| 2 | F-02 | The landing page currently tells a student with 24 open tasks that the day is free. |
+| 3 | F-03 | The headline “since I last checked” job is cheap to fix with one cursor and one default. |
+| 4 | F-04 + F-05 + F-06 | Build one deterministic planning layer that returns remaining effort, priority with reasons, and a budgeted plan. |
+| 5 | F-07 + F-08 | Source management and provider configuration are both about making the system explainable and operable. |
+| 6 | F-09 + F-10 + F-12 | Latency, docs, and dev-experience polish before the next demo. |
+
+## Not tested / limits
+
+- **Gmail:** no live Google OAuth, no mailbox import, no retry/expiry behavior. Findings rely on code inspection.
+- **File ingestion:** HTML/PDF upload limits and the PDF worker were not exercised this session.
+- **Deployment:** no Vercel deploy; serverless transport settings and the ephemeral upload path were not verified.
+- **Real Alexa+ hardware/client:** only the local simulator and `POST /api/alexa-chat` were used.
+- **UI rendering:** server-rendered HTML was inspected; the desktop was not available for screenshots. Interactive flows (dialogs, drag reorder) were tested through their APIs and code paths, not by clicking.
+- **LLM variance:** answers for F-03, F-05, and F-06 are single runs. The structural causes (no cursor, no scoring service, no budget check) are code-level and do not depend on the model’s wording.
+
+## Cleanup
+
+The review created one manual source, one academic item, one change event, and moved one task to test completed-work totals. Cleanup:
+
+- Deleted the test source, its revision, candidate links, processing run, academic item, and change event.
+- Restored the moved task to `selected_day = null`, `list_position = 3`, `status = todo`.
+- Verified the database returned to the pre-review counts: 13 academic items, 15 changes, 4 source documents, 4 source revisions, 21 source-item links, 4 processing runs, 26 tasks.
+
+The backend integration suite manages its own rows; it may refresh the single `planning_preferences` row. Its stored values (`150`, `4`) were unchanged.
+
+No API keys, OAuth tokens, database URLs, email addresses, or student source contents are reproduced in this log.
 
 ## Appendix — raw command evidence
 
 ```text
-$ uv run python -m unittest tests.test_mcp_server -v
-Ran 10 tests in 21.905s
-
+$ uv run python -m unittest tests.test_mcp_server
+Ran 10 tests in 25.610s
 OK
+(exit code 0; stderr suppressed for the clean run)
 ```
 
 ```text
-$ npm run build
-▲ Next.js 16.3.8 (Turbopack)
-✓ Compiled successfully in 7.8s
-✓ Generating static pages using 11 workers (25/25)
+POST /api/sources/text  (19.9 s)
+{
+  "processing_status": "processed",
+  "academic_item_ids": ["ec0273eb-…"],
+  "review_count": 1
+}
+
+GET /api/academic-items/ec0273eb-…
+{
+  "item_type": "assignment",
+  "due_at": null,
+  "grade_weight_percent": "20.0",
+  "late_penalty": "10% per day",
+  "review_state": "uncertain"
+}
+
+GET /api/sources/{id}/candidates
+"due_at": {"value": "2026-10-30T23:59", "precision": "datetime", "wording": "2026-10-30T23:59"}
+"review_reasons": ["due_at: source evidence is missing"]
 ```
 
 ```text
-$ npm run lint
-✖ 3 problems (0 errors, 3 warnings)
-- 'requestFromBridge' is defined but never used
-- 'Link' is defined but never used (gmail page)
-- 'Link' is defined but never used (sources/new page)
+normalize_candidate() isolation:
+literal, no timezone  -> due_at=None, ["due_at: time zone is not in source evidence"]
+literal + UTC         -> due_at=2026-10-30 23:59:00+00:00, []
+normalized ISO value  -> due_at=None, ["due_at: source evidence is missing"]
 ```
 
 ```text
-GET /api/preferences
-{ "preferred_daily_minutes": 150, "focus_task_count": 4 }
-
 GET /api/plan/today
-{ "day": "2026-10-23", "total_estimated_minutes": 345, "tasks": [ ... ] }
+{"day":"2026-10-26","total_estimated_minutes":0,"tasks":[]}
+
+GET /api/plan/upcoming?days=7
+2026-10-26: 0 tasks, 0m
+2026-10-27: 0 tasks, 0m
+… all seven days 0m
+
+GET /api/tasks?limit=100
+26 tasks, all todo; 24 scheduled 2026-10-19 … 2026-10-25; 2 in Backlog.
+
+GET /api/plan/overdue -> 404
 ```
 
 ```text
-$ .\app\mcp_server\.venv\Scripts\python.exe test\test_extraction_quality.py --case html_01_assignment --no-report
-
-html_01_assignment  [OK]  expected=7 candidates=22  P=0.32 R=1.00 F1=0.48
-field pass-rate: details=0.14  due_at=0.57
-TOTAL  expected=7 candidates=22 matched=7  micro P=0.32 R=1.00 F1=0.48
+PATCH /api/tasks/{id} {"status":"done"}
+GET /api/plan/upcoming?days=7 -> 2026-10-27: 1 task, 60m, status=done
+PATCH /api/tasks/{id} {"status":"todo"}   (reverted)
 ```
 
 ```text
-GET /api/sources              → 404
-GET /api/plan/kanban          → 404
-GET /connectors               → 404
-GET /connecters               → 200
+POST /api/alexa-chat  ("What changed since I last checked?")
+tools: study_get_changes_since {"since":"2026-10-26"}, study_list_academic_items {"limit":20}
+reply: "Since you last checked, one new item appeared: Assignment 2 …"
+GET /api/changes?limit=24 -> 15 events (2026-10-22, 2026-10-23)
 ```
 
-No API keys, OAuth tokens, email addresses, or raw source contents are reproduced in this log.
+```text
+POST /api/alexa-chat  ("Which assignment is actually the most urgent right now, and why?")
+tools: study_list_academic_items {"item_type":"assignment","limit":50}
+reply: "The most urgent one is 'Programming assignments' … Everything else either has no due date yet …"
+elapsed 24.7 s, 16,075 tokens
+```
+
+```text
+POST /api/alexa-chat  ("I have 45 minutes before my next class. What should I study?")
+reply suggests 30 + 30 + 15 = 75 minutes
+elapsed 115.7 s (cold), 12,533 tokens
+```
+
+```text
+GET /api/sources                          -> 404
+GET /api/sources/{id}                     -> 404
+DELETE /api/sources/{id}                  -> 404
+GET /api/plan/overdue                     -> 404
+GET /connectors                           -> 404
+GET /connecters                           -> 200
+```
